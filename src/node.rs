@@ -35,20 +35,3 @@ pub trait Node<T>: fmt::Debug {
     /// supposed to be reset to prevent reading stale values.
     fn update_outputs_from_inputs(&mut self);
 }
-
-/// TODO
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
-pub struct NodeIndex(usize);
-
-impl NodeIndex {
-    /// TODO
-    pub fn new(index: usize) -> Self {
-        Self(index)
-    }
-}
-
-impl From<NodeIndex> for usize {
-    fn from(from: NodeIndex) -> Self {
-        from.0
-    }
-}

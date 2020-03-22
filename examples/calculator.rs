@@ -428,16 +428,34 @@ fn main() {
     let calculator_node = flow.add_node(NodeProxy::new(Rc::clone(&calculator) as _));
     // Connect splitter -> calculator
     for port in (0..splitter.borrow().num_outputs()).map(PortIndex::new) {
-        flow.connect(Socket(splitter_node, port), Socket(calculator_node, port));
+        flow.connect(
+            Socket {
+                node: splitter_node,
+                port,
+            },
+            Socket {
+                node: calculator_node,
+                port,
+            },
+        );
     }
     // Connect calculator -> printer
     for port in (0..calculator.borrow().num_outputs()).map(PortIndex::new) {
-        flow.connect(Socket(calculator_node, port), Socket(printer_node, port));
+        flow.connect(
+            Socket {
+                node: calculator_node,
+                port,
+            },
+            Socket {
+                node: printer_node,
+                port,
+            },
+        );
     }
 
     //println!("flow = {:#?}", flow);
 
-    let topo_nodes = flow.topological_nodes();
+    let topo_nodes = flow.topological_nodes().unwrap();
     //println!("topo_nodes = {:?}", topo_nodes);
 
     for i in 0..10 {
