@@ -1,4 +1,4 @@
-use super::port::{Port, PortIndex};
+use super::port::{PortIndex, PortState};
 
 use std::fmt;
 
@@ -10,31 +10,29 @@ pub trait Node<T>: fmt::Debug {
     /// Number of output ports
     fn num_outputs(&self) -> usize;
 
-    /// Immutable access to an input port
-    fn input(&self, port: PortIndex) -> &Port<T>;
+    /// Query input state
+    fn input_state(&self, port: PortIndex) -> PortState;
 
-    /// Mutable access to an input port
-    fn input_mut(&mut self, port: PortIndex) -> &mut Port<T>;
+    /// Modify output state
+    fn set_output_state(&mut self, port: PortIndex, state: PortState);
 
-    /// Immutable access to an output port
-    fn output(&self, port: PortIndex) -> &Port<T>;
+    /// Modify input value
+    fn set_input_value(&mut self, port: PortIndex, value: Option<T>);
 
-    /// Mutable access to an output port
-    fn output_mut(&mut self, port: PortIndex) -> &mut Port<T>;
+    /// Consume output value
+    fn take_output_value(&mut self, port: PortIndex) -> Option<T>;
 
     /// Backward pass
     ///
-    /// Propagate the activation flags from output ports
-    /// backwards to all input ports that are affecting the
-    /// corresponding output values.
+    /// Propagate port states from outputs backwards to all inputs
+    /// that are affecting the corresponding output values.
     fn activate_inputs_from_outputs(&mut self);
 
     /// Forward pass
     ///
-    /// Recalculate the values of active output ports from
-    /// the current values of the corresponding input ports.
-    /// The values of inactive output ports are supposed to
-    /// be reset.
+    /// Recalculate the values of active outputs from the current
+    /// values at the input ports. Values of inactive outputs are
+    /// supposed to be reset to prevent reading stale values.
     fn update_outputs_from_inputs(&mut self);
 }
 

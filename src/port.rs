@@ -44,17 +44,8 @@ impl<T> Port<T> {
     }
 
     /// TODO
-    pub fn is_active(&self) -> bool {
-        self.state().is_active()
-    }
-
-    /// TODO
-    pub fn activate(&mut self, is_active: bool) {
-        if is_active {
-            self.state = PortState::Active;
-        } else {
-            self.state = PortState::Inactive;
-        }
+    pub fn set_state(&mut self, new_state: PortState) {
+        self.state = new_state;
     }
 
     /// TODO
@@ -68,23 +59,13 @@ impl<T> Port<T> {
     }
 
     /// TODO
-    pub fn set_value(&mut self, value: Option<T>) {
-        self.value = value;
+    pub fn set_value(&mut self, new_value: Option<T>) {
+        self.value = new_value;
     }
 
     /// TODO
     pub fn reset_value(&mut self) {
         self.value = None;
-    }
-
-    /// TODO
-    pub fn set_value_from<O>(&mut self, source: &mut Port<O>)
-    where
-        O: Into<T>,
-    {
-        debug_assert!(self.is_active());
-        debug_assert!(source.is_active());
-        self.value = source.value.take().map(Into::into)
     }
 }
 
