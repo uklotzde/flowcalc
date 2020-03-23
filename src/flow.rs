@@ -119,11 +119,25 @@ where
         let Socket { node, port } = output;
         let node = self.flow_node_mut(node);
         let connected_input = node.connected_outputs.remove(&port);
+        node.node.set_output_state(
+            port,
+            PortState {
+                connectivity: ConnectivityState::Disconnected,
+                ..node.node.output_state(port)
+            },
+        );
         if let Some(input) = connected_input {
             let Socket { node, port } = input;
             let node = self.flow_node_mut(node);
             let _connected_output = node.connected_inputs.remove(&port);
             debug_assert_eq!(_connected_output, Some(output));
+            node.node.set_input_state(
+                port,
+                PortState {
+                    connectivity: ConnectivityState::Disconnected,
+                    ..node.node.input_state(port)
+                },
+            );
         }
         connected_input
     }
@@ -139,11 +153,21 @@ where
         let Socket { node, port } = input;
         let node = self.flow_node_mut(node);
         let connected_output = node.connected_inputs.remove(&port);
+        let input_state = PortState {
+            connectivity: ConnectivityState::Disconnected,
+            ..node.node.input_state(port)
+        };
+        node.node.set_input_state(port, input_state);
         if let Some(output) = connected_output {
             let Socket { node, port } = output;
             let node = self.flow_node_mut(node);
             let _connected_input = node.connected_outputs.remove(&port);
             debug_assert_eq!(_connected_input, Some(input));
+            let output_state = PortState {
+                connectivity: ConnectivityState::Disconnected,
+                ..node.node.output_state(port)
+            };
+            node.node.set_output_state(port, output_state);
         }
         connected_output
     }
@@ -160,16 +184,24 @@ where
     pub fn connect(&mut self, output: Socket, input: Socket) {
         // Check for reflexive connections upfront
         debug_assert_ne!(output.node, input.node);
+        // Connect output port
         let output_node = self.flow_node_mut(output.node);
-        let output_port_index = output.port;
-        debug_assert!(output_port_index < PortIndex::new(output_node.node.num_outputs()));
-        output_node
-            .connected_outputs
-            .insert(output_port_index, input);
+        let output_port = output.port;
+        output_node.connected_outputs.insert(output_port, input);
+        let output_state = PortState {
+            connectivity: ConnectivityState::Disconnected,
+            ..output_node.node.output_state(output_port)
+        };
+        output_node.node.set_output_state(output_port, output_state);
+        // Connect input port
         let input_node = self.flow_node_mut(input.node);
-        let input_port_index = input.port;
-        debug_assert!(input_port_index < PortIndex::new(input_node.node.num_inputs()));
-        input_node.connected_inputs.insert(input_port_index, output);
+        let input_port = input.port;
+        input_node.connected_inputs.insert(input_port, output);
+        let input_state = PortState {
+            connectivity: ConnectivityState::Disconnected,
+            ..input_node.node.input_state(input_port)
+        };
+        input_node.node.set_input_state(input_port, input_state);
         // Check for no cycles
         debug_assert!(self.topological_nodes().is_ok());
     }

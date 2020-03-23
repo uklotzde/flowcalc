@@ -6,8 +6,37 @@ pub struct Port<T> {
 }
 
 /// TODO
+#[derive(Debug, Default, Clone, Copy, Eq, PartialEq)]
+pub struct PortState {
+    /// TODO
+    pub activity: ActivityState,
+
+    pub(crate) connectivity: ConnectivityState,
+}
+
+impl PortState {
+    /// TODO
+    pub const fn new() -> Self {
+        Self {
+            activity: ActivityState::new(),
+            connectivity: ConnectivityState::new(),
+        }
+    }
+
+    /// TODO
+    pub fn is_active(self) -> bool {
+        self.activity == ActivityState::Active
+    }
+
+    /// TODO
+    pub fn is_connected(self) -> bool {
+        self.connectivity == ConnectivityState::Connected
+    }
+}
+
+/// TODO
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub enum PortState {
+pub enum ActivityState {
     /// TODO
     Inactive,
 
@@ -15,17 +44,39 @@ pub enum PortState {
     Active,
 }
 
-impl Default for PortState {
-    fn default() -> Self {
+impl ActivityState {
+    /// TODO
+    pub const fn new() -> Self {
         Self::Inactive
     }
 }
 
+impl Default for ActivityState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// TODO
-impl PortState {
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum ConnectivityState {
     /// TODO
-    pub fn is_active(self) -> bool {
-        self == Self::Active
+    Disconnected,
+
+    /// TODO
+    Connected,
+}
+
+impl ConnectivityState {
+    /// TODO
+    pub const fn new() -> Self {
+        Self::Disconnected
+    }
+}
+
+impl Default for ConnectivityState {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -33,7 +84,7 @@ impl<T> Port<T> {
     /// TODO
     pub const fn new() -> Self {
         Self {
-            state: PortState::Inactive,
+            state: PortState::new(),
             value: None,
         }
     }
@@ -46,6 +97,19 @@ impl<T> Port<T> {
     /// TODO
     pub fn set_state(&mut self, new_state: PortState) {
         self.state = new_state;
+    }
+
+    /// TODO
+    pub fn activate(&mut self, is_active: bool) {
+        let new_activity = if is_active {
+            ActivityState::Active
+        } else {
+            ActivityState::Inactive
+        };
+        self.state = PortState {
+            activity: new_activity,
+            ..self.state
+        }
     }
 
     /// TODO

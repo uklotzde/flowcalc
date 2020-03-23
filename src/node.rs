@@ -13,6 +13,12 @@ pub trait Node<T>: fmt::Debug {
     /// Query input state
     fn input_state(&self, port: PortIndex) -> PortState;
 
+    /// Query output state
+    fn output_state(&self, port: PortIndex) -> PortState;
+
+    /// Modify output state
+    fn set_input_state(&mut self, port: PortIndex, state: PortState);
+
     /// Modify output state
     fn set_output_state(&mut self, port: PortIndex, state: PortState);
 

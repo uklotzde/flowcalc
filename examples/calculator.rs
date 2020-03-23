@@ -53,6 +53,14 @@ impl Node<f64> for OneToManySplitterNode {
         self.input(port).state()
     }
 
+    fn output_state(&self, port: PortIndex) -> PortState {
+        self.output(port).state()
+    }
+
+    fn set_input_state(&mut self, port: PortIndex, state: PortState) {
+        self.input_mut(port).set_state(state);
+    }
+
     fn set_output_state(&mut self, port: PortIndex, state: PortState) {
         self.output_mut(port).set_state(state);
     }
@@ -67,11 +75,7 @@ impl Node<f64> for OneToManySplitterNode {
 
     fn activate_inputs_from_outputs(&mut self) {
         self.input
-            .set_state(if self.outputs.iter().any(|p| p.state().is_active()) {
-                PortState::Active
-            } else {
-                PortState::Inactive
-            });
+            .activate(self.outputs.iter().any(|p| p.state().is_active()));
     }
 
     fn update_outputs_from_inputs(&mut self) {
@@ -182,6 +186,14 @@ impl Node<f64> for CalculatorNode {
         self.input(port).state()
     }
 
+    fn output_state(&self, port: PortIndex) -> PortState {
+        self.output(port).state()
+    }
+
+    fn set_input_state(&mut self, port: PortIndex, state: PortState) {
+        self.input_mut(port).set_state(state);
+    }
+
     fn set_output_state(&mut self, port: PortIndex, state: PortState) {
         self.output_mut(port).set_state(state);
     }
@@ -195,31 +207,19 @@ impl Node<f64> for CalculatorNode {
     }
 
     fn activate_inputs_from_outputs(&mut self) {
-        self.inputs[Self::input_index_lhs()].set_state(
-            // Needed for all outputs except the negation of the rhs input
-            if self
-                .outputs
+        // Needed for all outputs except the negation of the rhs input
+        self.inputs[Self::input_index_lhs()].activate(
+            self.outputs
                 .iter()
                 .enumerate()
-                .any(|(i, output)| i != Self::output_index_rhs_neg() && output.state().is_active())
-            {
-                PortState::Active
-            } else {
-                PortState::Inactive
-            },
+                .any(|(i, output)| i != Self::output_index_rhs_neg() && output.state().is_active()),
         );
-        self.inputs[Self::input_index_rhs()].set_state(
-            // Needed for all outputs except the negation of the lhs input
-            if self
-                .outputs
+        // Needed for all outputs except the negation of the lhs input
+        self.inputs[Self::input_index_rhs()].activate(
+            self.outputs
                 .iter()
                 .enumerate()
-                .any(|(i, output)| i != Self::output_index_lhs_neg() && output.state().is_active())
-            {
-                PortState::Active
-            } else {
-                PortState::Inactive
-            },
+                .any(|(i, output)| i != Self::output_index_lhs_neg() && output.state().is_active()),
         );
     }
 
@@ -332,6 +332,15 @@ impl Node<f64> for DebugPrinterSinkNode {
         self.input(port).state()
     }
 
+    fn output_state(&self, port: PortIndex) -> PortState {
+        // No outputs, never invoked
+        unimplemented!();
+    }
+
+    fn set_input_state(&mut self, port: PortIndex, state: PortState) {
+        self.input_mut(port).set_state(state);
+    }
+
     fn set_output_state(&mut self, _port: PortIndex, _state: PortState) {
         // No outputs, never invoked
         unimplemented!();
@@ -389,6 +398,14 @@ where
         self.node.borrow().input_state(port)
     }
 
+    fn output_state(&self, port: PortIndex) -> PortState {
+        self.node.borrow().output_state(port)
+    }
+
+    fn set_input_state(&mut self, port: PortIndex, state: PortState) {
+        self.node.borrow_mut().set_input_state(port, state)
+    }
+
     fn set_output_state(&mut self, port: PortIndex, state: PortState) {
         self.node.borrow_mut().set_output_state(port, state)
     }
@@ -419,15 +436,16 @@ fn main() {
         calculator.borrow().num_outputs(),
     )));
     // Print only selected outputs from the calculator
-    printer.borrow_mut().inputs[CalculatorNode::output_index_sum()].set_state(PortState::Active);
-    printer.borrow_mut().inputs[CalculatorNode::output_index_prod()].set_state(PortState::Active);
+    printer.borrow_mut().inputs[CalculatorNode::output_index_sum()].activate(true);
+    printer.borrow_mut().inputs[CalculatorNode::output_index_prod()].activate(true);
 
     let mut flow: Flow<NodeProxy<f64>, f64> = Flow::new();
     let printer_node = flow.add_node(NodeProxy::new(Rc::clone(&printer) as _));
     let splitter_node = flow.add_node(NodeProxy::new(Rc::clone(&splitter) as _));
     let calculator_node = flow.add_node(NodeProxy::new(Rc::clone(&calculator) as _));
     // Connect splitter -> calculator
-    for port in (0..splitter.borrow().num_outputs()).map(PortIndex::new) {
+    let num_splitter_outputs = splitter.borrow().num_outputs();
+    for port in (0..num_splitter_outputs).map(PortIndex::new) {
         flow.connect(
             Socket {
                 node: splitter_node,
@@ -440,7 +458,8 @@ fn main() {
         );
     }
     // Connect calculator -> printer
-    for port in (0..calculator.borrow().num_outputs()).map(PortIndex::new) {
+    let num_calculator_outputs  = calculator.borrow().num_outputs();
+    for port in (0..num_calculator_outputs).map(PortIndex::new) {
         flow.connect(
             Socket {
                 node: calculator_node,

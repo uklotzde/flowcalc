@@ -12,7 +12,7 @@ Components for building and executing simple _flow-based programming_ graphs.
 
 ## License
 
-Copyright (c) 2019 [Uwe Klotz](https://github.com/uklotzde), [uklotzde GmbH](https://github.com/uklotzde)
+Copyright (c) 2020 [Uwe Klotz](https://github.com/uklotzde), [uklotzde GmbH](https://github.com/uklotzde)
 
 Licensed under either of
 
