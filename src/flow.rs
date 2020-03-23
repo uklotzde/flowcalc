@@ -253,6 +253,7 @@ where
                 return Err(Cycle { node: index });
             }
             // Remove index from remaining predecessors
+            #[allow(clippy::mut_range_bound)]
             for i in none..candidates.len() {
                 let candidate = &mut candidates[i];
                 if let Ok(index) = candidate.1.binary_search(&index) {
@@ -279,7 +280,7 @@ where
         // 1st immutable borrow
         let in_node_ptr = {
             let in_node = self.flow_node_mut(in_node);
-            in_node.node.activate_inputs_from_outputs();
+            in_node.node.refresh_input_states();
             in_node as *const FlowNode<N>
         };
         // The 2nd mutable borrow is safe, because both nodes
@@ -306,7 +307,7 @@ where
         // 1st mutable borrow
         let out_node_ptr = {
             let out_node = self.flow_node_mut(out_node);
-            out_node.node.update_outputs_from_inputs();
+            out_node.node.update_output_values();
             out_node as *mut FlowNode<N>
         };
         // The 2nd mutable borrow is safe, because both nodes
@@ -315,14 +316,11 @@ where
         #[allow(unused_unsafe)]
         unsafe {
             for (out_port, in_socket) in &(*out_node_ptr).connected_outputs {
-                let in_node = &mut self.flow_node_mut(in_socket.node).node;
-                if !in_node.input_state(in_socket.port).is_active() {
-                    continue;
-                }
                 // 2nd mutable borrow
                 let out_node = &mut (*out_node_ptr).node;
                 let value = out_node.take_output_value(*out_port);
-                in_node.set_input_value(in_socket.port, value);
+                let in_node = &mut self.flow_node_mut(in_socket.node).node;
+                in_node.put_input_value(in_socket.port, value);
             }
         }
     }

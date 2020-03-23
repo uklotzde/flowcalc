@@ -2,6 +2,19 @@
 #[derive(Default, Debug, Clone, Copy)]
 pub struct Port<T> {
     state: PortState,
+
+    /// The current value sent to input and input port or
+    /// received by an output port.
+    ///
+    /// This slot is dedicated to receive input values
+    /// from preceding update stages and for sending
+    /// output values to subsequent updates stages when
+    /// updating the flow graph.
+    ///
+    /// Values of input ports are consumed when updating
+    /// the output ports of a node. Values of output ports
+    /// are consumed when transferring the value to connected
+    /// input ports of subsequent nodes.
     value: Option<T>,
 }
 
@@ -113,22 +126,20 @@ impl<T> Port<T> {
     }
 
     /// TODO
-    pub fn get_value(&self) -> &Option<T> {
-        &self.value
+    pub fn put_value(&mut self, value: Option<T>) {
+        debug_assert!(self.state().is_active() == value.is_some());
+        self.value = value;
     }
 
     /// TODO
     pub fn take_value(&mut self) -> Option<T> {
+        debug_assert!(self.state().is_active() == self.value.is_some());
         self.value.take()
     }
 
     /// TODO
-    pub fn set_value(&mut self, new_value: Option<T>) {
-        self.value = new_value;
-    }
-
-    /// TODO
     pub fn reset_value(&mut self) {
+        debug_assert!(!self.state().is_active());
         self.value = None;
     }
 }

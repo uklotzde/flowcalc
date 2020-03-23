@@ -1,6 +1,6 @@
 use flowcalc::{flow::*, node::*, port::*};
 
-use std::{cell::RefCell, fmt, rc::Rc};
+use std::{cell::RefCell, rc::Rc};
 
 #[derive(Default, Debug, Clone)]
 struct OneToManySplitterNode {
@@ -65,26 +65,27 @@ impl Node<f64> for OneToManySplitterNode {
         self.output_mut(port).set_state(state);
     }
 
-    fn set_input_value(&mut self, port: PortIndex, value: Option<f64>) {
-        self.input_mut(port).set_value(value)
+    fn put_input_value(&mut self, port: PortIndex, value: Option<f64>) {
+        self.input_mut(port).put_value(value)
     }
 
     fn take_output_value(&mut self, port: PortIndex) -> Option<f64> {
         self.output_mut(port).take_value()
     }
 
-    fn activate_inputs_from_outputs(&mut self) {
+    fn refresh_input_states(&mut self) {
         self.input
             .activate(self.outputs.iter().any(|p| p.state().is_active()));
     }
 
-    fn update_outputs_from_inputs(&mut self) {
+    fn update_output_values(&mut self) {
+        let input_value = self.input.take_value();
         for output in &mut self.outputs {
             if !output.state().is_active() {
                 output.reset_value();
                 continue;
             }
-            output.set_value(*self.input.get_value());
+            output.put_value(input_value);
         }
     }
 }
@@ -93,26 +94,10 @@ impl Node<f64> for OneToManySplitterNode {
 struct CalculatorNode {
     inputs: [Port<f64>; 2],
     outputs: [Port<f64>; 5],
-    multiplier: Option<f64>,
+    multiplier: f64,
 }
 
 impl CalculatorNode {
-    fn input_state(&self, port: PortIndex) -> PortState {
-        self.input(port).state()
-    }
-
-    fn set_output_state(&mut self, port: PortIndex, state: PortState) {
-        self.output_mut(port).set_state(state);
-    }
-
-    fn set_input_value(&mut self, port: PortIndex, value: Option<f64>) {
-        self.input_mut(port).set_value(value)
-    }
-
-    fn take_output_value(&mut self, port: PortIndex) -> Option<f64> {
-        self.output_mut(port).take_value()
-    }
-
     pub const fn input_index_lhs() -> usize {
         0
     }
@@ -141,15 +126,11 @@ impl CalculatorNode {
         4
     }
 
-    pub fn set_multiplier(&mut self, multiplier: Option<f64>) {
+    pub fn set_multiplier(&mut self, multiplier: f64) {
         if self.multiplier == multiplier {
             return;
         }
         self.multiplier = multiplier;
-        // The multiplier affects all outputs
-        for out_port in &mut self.outputs {
-            out_port.reset_value()
-        }
     }
 
     pub fn input(&self, port: PortIndex) -> &Port<f64> {
@@ -198,15 +179,15 @@ impl Node<f64> for CalculatorNode {
         self.output_mut(port).set_state(state);
     }
 
-    fn set_input_value(&mut self, port: PortIndex, value: Option<f64>) {
-        self.input_mut(port).set_value(value)
+    fn put_input_value(&mut self, port: PortIndex, value: Option<f64>) {
+        self.input_mut(port).put_value(value)
     }
 
     fn take_output_value(&mut self, port: PortIndex) -> Option<f64> {
         self.output_mut(port).take_value()
     }
 
-    fn activate_inputs_from_outputs(&mut self) {
+    fn refresh_input_states(&mut self) {
         // Needed for all outputs except the negation of the rhs input
         self.inputs[Self::input_index_lhs()].activate(
             self.outputs
@@ -223,35 +204,34 @@ impl Node<f64> for CalculatorNode {
         );
     }
 
-    fn update_outputs_from_inputs(&mut self) {
+    fn update_output_values(&mut self) {
+        let lhs_input_value = self.inputs[Self::input_index_lhs()].take_value();
+        let rhs_input_value = self.inputs[Self::input_index_rhs()].take_value();
         for (index, output) in self.outputs.iter_mut().enumerate() {
-            if !output.state().is_active() || self.multiplier.is_none() {
+            if !output.state().is_active() {
                 output.reset_value();
                 continue;
             }
             let value = match index {
                 0 => {
                     debug_assert_eq!(index, Self::output_index_lhs_neg());
-                    if let Some(lhs) = self.inputs[Self::input_index_lhs()].get_value() {
-                        Some(-*lhs)
+                    if let Some(value) = lhs_input_value {
+                        Some(-value)
                     } else {
                         None
                     }
                 }
                 1 => {
                     debug_assert_eq!(index, Self::output_index_rhs_neg());
-                    if let Some(rhs) = self.inputs[Self::input_index_rhs()].get_value() {
-                        Some(-*rhs)
+                    if let Some(value) = rhs_input_value {
+                        Some(-value)
                     } else {
                         None
                     }
                 }
                 2 => {
                     debug_assert_eq!(index, Self::output_index_sum());
-                    if let (Some(lhs), Some(rhs)) = (
-                        self.inputs[Self::input_index_rhs()].get_value(),
-                        self.inputs[Self::input_index_rhs()].get_value(),
-                    ) {
+                    if let (Some(lhs), Some(rhs)) = (lhs_input_value, rhs_input_value) {
                         Some(lhs + rhs)
                     } else {
                         None
@@ -259,10 +239,7 @@ impl Node<f64> for CalculatorNode {
                 }
                 3 => {
                     debug_assert_eq!(index, Self::output_index_diff());
-                    if let (Some(lhs), Some(rhs)) = (
-                        self.inputs[Self::input_index_rhs()].get_value(),
-                        self.inputs[Self::input_index_rhs()].get_value(),
-                    ) {
+                    if let (Some(lhs), Some(rhs)) = (lhs_input_value, rhs_input_value) {
                         Some(lhs - rhs)
                     } else {
                         None
@@ -270,10 +247,7 @@ impl Node<f64> for CalculatorNode {
                 }
                 4 => {
                     debug_assert_eq!(index, Self::output_index_prod());
-                    if let (Some(lhs), Some(rhs)) = (
-                        self.inputs[Self::input_index_rhs()].get_value(),
-                        self.inputs[Self::input_index_rhs()].get_value(),
-                    ) {
+                    if let (Some(lhs), Some(rhs)) = (lhs_input_value, rhs_input_value) {
                         Some(lhs * rhs)
                     } else {
                         None
@@ -281,10 +255,8 @@ impl Node<f64> for CalculatorNode {
                 }
                 _ => panic!("invalid output index"),
             };
-            debug_assert!(self.multiplier.is_some());
-            if let Some(value) = value {
-                output.set_value(self.multiplier.map(|mult| mult * value));
-            }
+            let multiplier = self.multiplier;
+            output.put_value(value.map(|value| multiplier * value));
         }
     }
 }
@@ -309,14 +281,6 @@ impl DebugPrinterSinkNode {
         debug_assert!(port < PortIndex::new(self.num_inputs()));
         &mut self.inputs[usize::from(port)]
     }
-
-    pub fn output(&self, _: PortIndex) -> &Port<f64> {
-        unimplemented!("no outputs available");
-    }
-
-    pub fn output_mut(&mut self, _: PortIndex) -> &mut Port<f64> {
-        unimplemented!("no outputs available");
-    }
 }
 
 impl Node<f64> for DebugPrinterSinkNode {
@@ -332,7 +296,7 @@ impl Node<f64> for DebugPrinterSinkNode {
         self.input(port).state()
     }
 
-    fn output_state(&self, port: PortIndex) -> PortState {
+    fn output_state(&self, _port: PortIndex) -> PortState {
         // No outputs, never invoked
         unimplemented!();
     }
@@ -346,8 +310,8 @@ impl Node<f64> for DebugPrinterSinkNode {
         unimplemented!();
     }
 
-    fn set_input_value(&mut self, port: PortIndex, value: Option<f64>) {
-        self.input_mut(port).set_value(value)
+    fn put_input_value(&mut self, port: PortIndex, value: Option<f64>) {
+        self.input_mut(port).put_value(value)
     }
 
     fn take_output_value(&mut self, _port: PortIndex) -> Option<f64> {
@@ -355,75 +319,19 @@ impl Node<f64> for DebugPrinterSinkNode {
         unimplemented!();
     }
 
-    fn activate_inputs_from_outputs(&mut self) {
+    fn refresh_input_states(&mut self) {
         // No outputs, nothing to do
     }
 
-    fn update_outputs_from_inputs(&mut self) {
+    fn update_output_values(&mut self) {
         // No outputs, just a side-effect
         println!(
             "{:?}",
             self.inputs
-                .iter()
-                .map(|input| input.get_value())
+                .iter_mut()
+                .map(|input| input.take_value())
                 .collect::<Vec<_>>()
         );
-    }
-}
-
-#[derive(Debug, Clone)]
-struct NodeProxy<T> {
-    node: Rc<RefCell<dyn Node<T>>>,
-}
-
-impl<T> NodeProxy<T> {
-    pub fn new(node: Rc<RefCell<dyn Node<T>>>) -> Self {
-        Self { node }
-    }
-}
-
-impl<T> Node<T> for NodeProxy<T>
-where
-    T: fmt::Debug,
-{
-    fn num_inputs(&self) -> usize {
-        self.node.borrow().num_inputs()
-    }
-
-    fn num_outputs(&self) -> usize {
-        self.node.borrow().num_outputs()
-    }
-
-    fn input_state(&self, port: PortIndex) -> PortState {
-        self.node.borrow().input_state(port)
-    }
-
-    fn output_state(&self, port: PortIndex) -> PortState {
-        self.node.borrow().output_state(port)
-    }
-
-    fn set_input_state(&mut self, port: PortIndex, state: PortState) {
-        self.node.borrow_mut().set_input_state(port, state)
-    }
-
-    fn set_output_state(&mut self, port: PortIndex, state: PortState) {
-        self.node.borrow_mut().set_output_state(port, state)
-    }
-
-    fn set_input_value(&mut self, port: PortIndex, value: Option<T>) {
-        self.node.borrow_mut().set_input_value(port, value)
-    }
-
-    fn take_output_value(&mut self, port: PortIndex) -> Option<T> {
-        self.node.borrow_mut().take_output_value(port)
-    }
-
-    fn activate_inputs_from_outputs(&mut self) {
-        self.node.borrow_mut().activate_inputs_from_outputs();
-    }
-
-    fn update_outputs_from_inputs(&mut self) {
-        self.node.borrow_mut().update_outputs_from_inputs();
     }
 }
 
@@ -439,10 +347,10 @@ fn main() {
     printer.borrow_mut().inputs[CalculatorNode::output_index_sum()].activate(true);
     printer.borrow_mut().inputs[CalculatorNode::output_index_prod()].activate(true);
 
-    let mut flow: Flow<NodeProxy<f64>, f64> = Flow::new();
-    let printer_node = flow.add_node(NodeProxy::new(Rc::clone(&printer) as _));
-    let splitter_node = flow.add_node(NodeProxy::new(Rc::clone(&splitter) as _));
-    let calculator_node = flow.add_node(NodeProxy::new(Rc::clone(&calculator) as _));
+    let mut flow: Flow<RcProxyNode<f64>, f64> = Flow::new();
+    let printer_node = flow.add_node(RcProxyNode::new(Rc::clone(&printer) as _));
+    let splitter_node = flow.add_node(RcProxyNode::new(Rc::clone(&splitter) as _));
+    let calculator_node = flow.add_node(RcProxyNode::new(Rc::clone(&calculator) as _));
     // Connect splitter -> calculator
     let num_splitter_outputs = splitter.borrow().num_outputs();
     for port in (0..num_splitter_outputs).map(PortIndex::new) {
@@ -458,7 +366,7 @@ fn main() {
         );
     }
     // Connect calculator -> printer
-    let num_calculator_outputs  = calculator.borrow().num_outputs();
+    let num_calculator_outputs = calculator.borrow().num_outputs();
     for port in (0..num_calculator_outputs).map(PortIndex::new) {
         flow.connect(
             Socket {
@@ -487,14 +395,15 @@ fn main() {
         {
             let single_input = &mut splitter.borrow_mut().input;
             if single_input.state().is_active() {
-                single_input.set_value(Some(f64::from(i)));
+                single_input.put_value(Some(f64::from(i)));
             }
             // release mutable borrow at runtime
         }
-        // ...and update parameters
-        calculator
-            .borrow_mut()
-            .set_multiplier(Some(f64::from(i) / 2.0));
+        {
+            // ...and update parameters
+            calculator.borrow_mut().set_multiplier(f64::from(i) / 2.0);
+            // release mutable borrow at runtime
+        }
 
         // Forward pass
         for node in topo_nodes.iter() {
