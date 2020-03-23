@@ -57,28 +57,28 @@ impl Node<f64> for OneToManySplitterNode {
         self.output(port).state()
     }
 
-    fn set_input_state(&mut self, port: PortIndex, state: PortState) {
+    fn set_input_state(&mut self, _: AccessToken, port: PortIndex, state: PortState) {
         self.input_mut(port).set_state(state);
     }
 
-    fn set_output_state(&mut self, port: PortIndex, state: PortState) {
+    fn set_output_state(&mut self, _: AccessToken, port: PortIndex, state: PortState) {
         self.output_mut(port).set_state(state);
     }
 
-    fn put_input_value(&mut self, port: PortIndex, value: Option<f64>) {
+    fn put_input_value(&mut self, _: AccessToken, port: PortIndex, value: Option<f64>) {
         self.input_mut(port).put_value(value)
     }
 
-    fn take_output_value(&mut self, port: PortIndex) -> Option<f64> {
+    fn take_output_value(&mut self, _: AccessToken, port: PortIndex) -> Option<f64> {
         self.output_mut(port).take_value()
     }
 
-    fn refresh_input_states(&mut self) {
+    fn refresh_input_states(&mut self, _: AccessToken) {
         self.input
             .activate(self.outputs.iter().any(|p| p.state().is_active()));
     }
 
-    fn update_output_values(&mut self) {
+    fn update_output_values(&mut self, _: AccessToken) {
         let input_value = self.input.take_value();
         for output in &mut self.outputs {
             if !output.state().is_active() {
@@ -171,23 +171,23 @@ impl Node<f64> for CalculatorNode {
         self.output(port).state()
     }
 
-    fn set_input_state(&mut self, port: PortIndex, state: PortState) {
+    fn set_input_state(&mut self, _: AccessToken, port: PortIndex, state: PortState) {
         self.input_mut(port).set_state(state);
     }
 
-    fn set_output_state(&mut self, port: PortIndex, state: PortState) {
+    fn set_output_state(&mut self, _: AccessToken, port: PortIndex, state: PortState) {
         self.output_mut(port).set_state(state);
     }
 
-    fn put_input_value(&mut self, port: PortIndex, value: Option<f64>) {
+    fn put_input_value(&mut self, _: AccessToken, port: PortIndex, value: Option<f64>) {
         self.input_mut(port).put_value(value)
     }
 
-    fn take_output_value(&mut self, port: PortIndex) -> Option<f64> {
+    fn take_output_value(&mut self, _: AccessToken, port: PortIndex) -> Option<f64> {
         self.output_mut(port).take_value()
     }
 
-    fn refresh_input_states(&mut self) {
+    fn refresh_input_states(&mut self, _: AccessToken) {
         // Needed for all outputs except the negation of the rhs input
         self.inputs[Self::input_index_lhs()].activate(
             self.outputs
@@ -204,7 +204,7 @@ impl Node<f64> for CalculatorNode {
         );
     }
 
-    fn update_output_values(&mut self) {
+    fn update_output_values(&mut self, _: AccessToken) {
         let lhs_input_value = self.inputs[Self::input_index_lhs()].take_value();
         let rhs_input_value = self.inputs[Self::input_index_rhs()].take_value();
         for (index, output) in self.outputs.iter_mut().enumerate() {
@@ -301,29 +301,29 @@ impl Node<f64> for DebugPrinterSinkNode {
         unimplemented!();
     }
 
-    fn set_input_state(&mut self, port: PortIndex, state: PortState) {
+    fn set_input_state(&mut self, _: AccessToken, port: PortIndex, state: PortState) {
         self.input_mut(port).set_state(state);
     }
 
-    fn set_output_state(&mut self, _port: PortIndex, _state: PortState) {
+    fn set_output_state(&mut self, _: AccessToken, _port: PortIndex, _state: PortState) {
         // No outputs, never invoked
         unimplemented!();
     }
 
-    fn put_input_value(&mut self, port: PortIndex, value: Option<f64>) {
+    fn put_input_value(&mut self, _: AccessToken, port: PortIndex, value: Option<f64>) {
         self.input_mut(port).put_value(value)
     }
 
-    fn take_output_value(&mut self, _port: PortIndex) -> Option<f64> {
+    fn take_output_value(&mut self, _: AccessToken, _port: PortIndex) -> Option<f64> {
         // No outputs, never invoked
         unimplemented!();
     }
 
-    fn refresh_input_states(&mut self) {
+    fn refresh_input_states(&mut self, _: AccessToken) {
         // No outputs, nothing to do
     }
 
-    fn update_output_values(&mut self) {
+    fn update_output_values(&mut self, _: AccessToken) {
         // No outputs, just a side-effect
         println!(
             "{:?}",

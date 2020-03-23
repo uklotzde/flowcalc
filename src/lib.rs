@@ -20,3 +20,6 @@ pub mod node;
 
 /// TODO
 pub mod port;
+
+#[derive(Debug)]
+struct SealedTag;

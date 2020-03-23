@@ -1,6 +1,22 @@
-use crate::{node::*, port::*};
+use crate::{node::*, port::*, SealedTag};
 
 use std::{collections::HashMap, marker::PhantomData};
+
+/// Private access token of `Flow` to access sealed
+/// methods in `Node`.
+///
+/// This is a workaround for restricting the visibility of
+/// methods in traits to the crate that defines the trait.
+#[derive(Debug)]
+pub struct AccessToken {
+    tag: SealedTag,
+}
+
+impl AccessToken {
+    fn new() -> Self {
+        Self { tag: SealedTag }
+    }
+}
 
 /// Node identifier in a flow graph
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
@@ -120,6 +136,7 @@ where
         let node = self.flow_node_mut(node);
         let connected_input = node.connected_outputs.remove(&port);
         node.node.set_output_state(
+            AccessToken::new(),
             port,
             PortState {
                 connectivity: ConnectivityState::Disconnected,
@@ -132,6 +149,7 @@ where
             let _connected_output = node.connected_inputs.remove(&port);
             debug_assert_eq!(_connected_output, Some(output));
             node.node.set_input_state(
+                AccessToken::new(),
                 port,
                 PortState {
                     connectivity: ConnectivityState::Disconnected,
@@ -157,7 +175,8 @@ where
             connectivity: ConnectivityState::Disconnected,
             ..node.node.input_state(port)
         };
-        node.node.set_input_state(port, input_state);
+        node.node
+            .set_input_state(AccessToken::new(), port, input_state);
         if let Some(output) = connected_output {
             let Socket { node, port } = output;
             let node = self.flow_node_mut(node);
@@ -167,7 +186,8 @@ where
                 connectivity: ConnectivityState::Disconnected,
                 ..node.node.output_state(port)
             };
-            node.node.set_output_state(port, output_state);
+            node.node
+                .set_output_state(AccessToken::new(), port, output_state);
         }
         connected_output
     }
@@ -192,7 +212,9 @@ where
             connectivity: ConnectivityState::Disconnected,
             ..output_node.node.output_state(output_port)
         };
-        output_node.node.set_output_state(output_port, output_state);
+        output_node
+            .node
+            .set_output_state(AccessToken::new(), output_port, output_state);
         // Connect input port
         let input_node = self.flow_node_mut(input.node);
         let input_port = input.port;
@@ -201,7 +223,9 @@ where
             connectivity: ConnectivityState::Disconnected,
             ..input_node.node.input_state(input_port)
         };
-        input_node.node.set_input_state(input_port, input_state);
+        input_node
+            .node
+            .set_input_state(AccessToken::new(), input_port, input_state);
         // Check for no cycles
         debug_assert!(self.topological_nodes().is_ok());
     }
@@ -280,7 +304,7 @@ where
         // 1st immutable borrow
         let in_node_ptr = {
             let in_node = self.flow_node_mut(in_node);
-            in_node.node.refresh_input_states();
+            in_node.node.refresh_input_states(AccessToken::new());
             in_node as *const FlowNode<N>
         };
         // The 2nd mutable borrow is safe, because both nodes
@@ -293,7 +317,7 @@ where
                 let state = in_node.input_state(*in_port);
                 // 2nd mutable borrow
                 let out_node = &mut self.flow_node_mut(out_socket.node).node as *mut N;
-                (*out_node).set_output_state(out_socket.port, state);
+                (*out_node).set_output_state(AccessToken::new(), out_socket.port, state);
             }
         }
     }
@@ -307,7 +331,7 @@ where
         // 1st mutable borrow
         let out_node_ptr = {
             let out_node = self.flow_node_mut(out_node);
-            out_node.node.update_output_values();
+            out_node.node.update_output_values(AccessToken::new());
             out_node as *mut FlowNode<N>
         };
         // The 2nd mutable borrow is safe, because both nodes
@@ -318,9 +342,9 @@ where
             for (out_port, in_socket) in &(*out_node_ptr).connected_outputs {
                 // 2nd mutable borrow
                 let out_node = &mut (*out_node_ptr).node;
-                let value = out_node.take_output_value(*out_port);
+                let value = out_node.take_output_value(AccessToken::new(), *out_port);
                 let in_node = &mut self.flow_node_mut(in_socket.node).node;
-                in_node.put_input_value(in_socket.port, value);
+                in_node.put_input_value(AccessToken::new(), in_socket.port, value);
             }
         }
     }

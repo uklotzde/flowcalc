@@ -1,4 +1,4 @@
-use super::port::{PortIndex, PortState};
+use super::{port::{PortIndex, PortState}, flow::AccessToken};
 
 use std::{cell::RefCell, fmt, rc::Rc};
 
@@ -17,22 +17,22 @@ pub trait Node<T>: fmt::Debug {
     fn output_state(&self, port: PortIndex) -> PortState;
 
     /// Modify the state of an input port
-    fn set_input_state(&mut self, port: PortIndex, state: PortState);
+    fn set_input_state(&mut self, token: AccessToken, port: PortIndex, state: PortState);
 
     /// Modify the state of an output port
-    fn set_output_state(&mut self, port: PortIndex, state: PortState);
+    fn set_output_state(&mut self, token: AccessToken, port: PortIndex, state: PortState);
 
     /// Place an input value into the port
     ///
     /// The previous values (if any) is overwritten.
-    fn put_input_value(&mut self, port: PortIndex, value: Option<T>);
+    fn put_input_value(&mut self, token: AccessToken, port: PortIndex, value: Option<T>);
 
     /// Consume an output value from the port
     ///
     /// Only a single invocation is permitted after the outputs
     /// have been updated. Results of subsequent invocations are
     /// undefined and supposed to return `None`.
-    fn take_output_value(&mut self, port: PortIndex) -> Option<T>;
+    fn take_output_value(&mut self, token: AccessToken, port: PortIndex) -> Option<T>;
 
     /// Backward pass: Refresh the state of all inputs
     ///
@@ -42,7 +42,7 @@ pub trait Node<T>: fmt::Debug {
     /// This decision is made independent of whether the node needs
     /// to be updated or not. It must only take into account the pure
     /// functional dependencies between inputs and outputs.
-    fn refresh_input_states(&mut self);
+    fn refresh_input_states(&mut self, token: AccessToken);
 
     /// Forward pass: Update the values of all outputs
     ///
@@ -60,7 +60,7 @@ pub trait Node<T>: fmt::Debug {
     /// a result of consuming them. The current input values could
     /// still be cached internally for subsequent operations, e.g.
     /// to determine if input values have changed between invocations.
-    fn update_output_values(&mut self);
+    fn update_output_values(&mut self, token: AccessToken);
 }
 
 /// A reference-counted node proxy
@@ -96,27 +96,27 @@ where
         self.node.borrow().output_state(port)
     }
 
-    fn set_input_state(&mut self, port: PortIndex, state: PortState) {
-        self.node.borrow_mut().set_input_state(port, state)
+    fn set_input_state(&mut self, token: AccessToken, port: PortIndex, state: PortState) {
+        self.node.borrow_mut().set_input_state(token, port, state)
     }
 
-    fn set_output_state(&mut self, port: PortIndex, state: PortState) {
-        self.node.borrow_mut().set_output_state(port, state)
+    fn set_output_state(&mut self, token: AccessToken, port: PortIndex, state: PortState) {
+        self.node.borrow_mut().set_output_state(token, port, state)
     }
 
-    fn put_input_value(&mut self, port: PortIndex, value: Option<T>) {
-        self.node.borrow_mut().put_input_value(port, value)
+    fn put_input_value(&mut self, token: AccessToken, port: PortIndex, value: Option<T>) {
+        self.node.borrow_mut().put_input_value(token, port, value)
     }
 
-    fn take_output_value(&mut self, port: PortIndex) -> Option<T> {
-        self.node.borrow_mut().take_output_value(port)
+    fn take_output_value(&mut self, token: AccessToken, port: PortIndex) -> Option<T> {
+        self.node.borrow_mut().take_output_value(token, port)
     }
 
-    fn refresh_input_states(&mut self) {
-        self.node.borrow_mut().refresh_input_states();
+    fn refresh_input_states(&mut self, token: AccessToken) {
+        self.node.borrow_mut().refresh_input_states(token);
     }
 
-    fn update_output_values(&mut self) {
-        self.node.borrow_mut().update_output_values();
+    fn update_output_values(&mut self, token: AccessToken) {
+        self.node.borrow_mut().update_output_values(token);
     }
 }
