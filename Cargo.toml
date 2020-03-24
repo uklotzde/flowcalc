@@ -12,3 +12,8 @@ edition = "2018"
 
 [dependencies]
 #petgraph = "0.5"
+
+#[dev-dependencies]
+#bardecoder = "*"
+#image = "*"
+#qrcode = "*"

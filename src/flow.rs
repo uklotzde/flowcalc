@@ -42,10 +42,10 @@ impl From<NodeId> for usize {
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub struct Socket {
     /// The node identifier
-    pub node: NodeId,
+    pub node_id: NodeId,
 
     /// The port index
-    pub port: PortIndex,
+    pub port_index: PortIndex,
 }
 
 #[derive(Debug)]
@@ -107,21 +107,21 @@ where
     }
 
     /// TODO
-    pub fn node(&self, index: NodeId) -> &N {
-        &self.flow_node(index).node
+    pub fn node(&self, node_id: NodeId) -> &N {
+        &self.flow_node(node_id).node
     }
 
     /// TODO
-    pub fn node_mut(&mut self, index: NodeId) -> &mut N {
-        &mut self.flow_node_mut(index).node
+    pub fn node_mut(&mut self, node_id: NodeId) -> &mut N {
+        &mut self.flow_node_mut(node_id).node
     }
 
-    fn flow_node(&self, index: NodeId) -> &FlowNode<N> {
-        &self.nodes[usize::from(index)]
+    fn flow_node(&self, node_id: NodeId) -> &FlowNode<N> {
+        &self.nodes[usize::from(node_id)]
     }
 
-    fn flow_node_mut(&mut self, index: NodeId) -> &mut FlowNode<N> {
-        &mut self.nodes[usize::from(index)]
+    fn flow_node_mut(&mut self, node_id: NodeId) -> &mut FlowNode<N> {
+        &mut self.nodes[usize::from(node_id)]
     }
 
     /// Remove a connection from an output socket
@@ -132,30 +132,20 @@ where
     /// State or values of disconnected ports on both
     /// ends of a removed connection are not modified.
     pub fn disconnect_output(&mut self, output: Socket) -> Option<Socket> {
-        let Socket { node, port } = output;
-        let node = self.flow_node_mut(node);
-        let connected_input = node.connected_outputs.remove(&port);
-        node.node.set_output_state(
-            AccessToken::new(),
-            port,
-            PortState {
-                connectivity: ConnectivityState::Disconnected,
-                ..node.node.output_state(port)
-            },
-        );
+        let Socket {
+            node_id,
+            port_index,
+        } = output;
+        let node = self.flow_node_mut(node_id);
+        let connected_input = node.connected_outputs.remove(&port_index);
         if let Some(input) = connected_input {
-            let Socket { node, port } = input;
-            let node = self.flow_node_mut(node);
-            let _connected_output = node.connected_inputs.remove(&port);
+            let Socket {
+                node_id,
+                port_index,
+            } = input;
+            let node = self.flow_node_mut(node_id);
+            let _connected_output = node.connected_inputs.remove(&port_index);
             debug_assert_eq!(_connected_output, Some(output));
-            node.node.set_input_state(
-                AccessToken::new(),
-                port,
-                PortState {
-                    connectivity: ConnectivityState::Disconnected,
-                    ..node.node.input_state(port)
-                },
-            );
         }
         connected_input
     }
@@ -168,26 +158,20 @@ where
     /// State or values of disconnected ports on both
     /// ends of a removed connection are not modified.
     pub fn disconnect_input(&mut self, input: Socket) -> Option<Socket> {
-        let Socket { node, port } = input;
-        let node = self.flow_node_mut(node);
-        let connected_output = node.connected_inputs.remove(&port);
-        let input_state = PortState {
-            connectivity: ConnectivityState::Disconnected,
-            ..node.node.input_state(port)
-        };
-        node.node
-            .set_input_state(AccessToken::new(), port, input_state);
+        let Socket {
+            node_id,
+            port_index,
+        } = input;
+        let node = self.flow_node_mut(node_id);
+        let connected_output = node.connected_inputs.remove(&port_index);
         if let Some(output) = connected_output {
-            let Socket { node, port } = output;
-            let node = self.flow_node_mut(node);
-            let _connected_input = node.connected_outputs.remove(&port);
+            let Socket {
+                node_id,
+                port_index,
+            } = output;
+            let node = self.flow_node_mut(node_id);
+            let _connected_input = node.connected_outputs.remove(&port_index);
             debug_assert_eq!(_connected_input, Some(input));
-            let output_state = PortState {
-                connectivity: ConnectivityState::Disconnected,
-                ..node.node.output_state(port)
-            };
-            node.node
-                .set_output_state(AccessToken::new(), port, output_state);
         }
         connected_output
     }
@@ -203,29 +187,15 @@ where
     /// assertion is triggered.
     pub fn connect(&mut self, output: Socket, input: Socket) {
         // Check for reflexive connections upfront
-        debug_assert_ne!(output.node, input.node);
+        debug_assert_ne!(output.node_id, input.node_id);
         // Connect output port
-        let output_node = self.flow_node_mut(output.node);
-        let output_port = output.port;
-        output_node.connected_outputs.insert(output_port, input);
-        let output_state = PortState {
-            connectivity: ConnectivityState::Disconnected,
-            ..output_node.node.output_state(output_port)
-        };
-        output_node
-            .node
-            .set_output_state(AccessToken::new(), output_port, output_state);
+        let output_node = self.flow_node_mut(output.node_id);
+        let output_index = output.port_index;
+        output_node.connected_outputs.insert(output_index, input);
         // Connect input port
-        let input_node = self.flow_node_mut(input.node);
-        let input_port = input.port;
-        input_node.connected_inputs.insert(input_port, output);
-        let input_state = PortState {
-            connectivity: ConnectivityState::Disconnected,
-            ..input_node.node.input_state(input_port)
-        };
-        input_node
-            .node
-            .set_input_state(AccessToken::new(), input_port, input_state);
+        let input_node = self.flow_node_mut(input.node_id);
+        let input_index = input.port_index;
+        input_node.connected_inputs.insert(input_index, output);
         // Check for no cycles
         debug_assert!(self.topological_nodes().is_ok());
     }
@@ -256,7 +226,7 @@ where
             let mut predecessors: Vec<_> = node
                 .connected_inputs
                 .values()
-                .map(|socket| socket.node)
+                .map(|socket| socket.node_id)
                 .collect();
             predecessors.sort_unstable();
             predecessors.dedup();
@@ -300,24 +270,31 @@ where
     /// Propagate the output states of a select node to its
     /// inputs and then along the input connections to all
     /// outputs of preceding nodes.
-    pub fn propagate_output_states_backward(&mut self, in_node: NodeId) {
-        // 1st immutable borrow
-        let in_node_ptr = {
-            let in_node = self.flow_node_mut(in_node);
-            in_node.node.refresh_input_states(AccessToken::new());
-            in_node as *const FlowNode<N>
+    pub fn process_outputs(&mut self, node_id: NodeId) {
+        let flow_node_ptr = {
+            let flow_node = self.flow_node_mut(node_id);
+            flow_node.node.process_outputs(AccessToken::new());
+            flow_node as *mut FlowNode<N>
         };
         // The 2nd mutable borrow is safe, because both nodes
         // are guaranteed to be disjunct and the flow graph
         // itself is not modified.
         #[allow(unused_unsafe)]
         unsafe {
-            for (in_port, out_socket) in &(*in_node_ptr).connected_inputs {
-                let in_node = &(*in_node_ptr).node;
-                let state = in_node.input_state(*in_port);
-                // 2nd mutable borrow
-                let out_node = &mut self.flow_node_mut(out_socket.node).node as *mut N;
-                (*out_node).set_output_state(AccessToken::new(), out_socket.port, state);
+            let node = &mut (*flow_node_ptr).node;
+            for (input_index, incoming) in &(*flow_node_ptr).connected_inputs {
+                let packet = node.dispatch_input_packet(AccessToken::new(), *input_index);
+                let Socket {
+                    node_id: predecessor_node_id,
+                    port_index: predecessor_port_index,
+                } = *incoming;
+                debug_assert_ne!(node_id, predecessor_node_id); // disjunct nodes!
+                let predecessor_node = &mut self.flow_node_mut(predecessor_node_id).node;
+                predecessor_node.receive_output_packet(
+                    AccessToken::new(),
+                    predecessor_port_index,
+                    packet,
+                );
             }
         }
     }
@@ -327,24 +304,31 @@ where
     /// Update the output values of a selected node and then
     /// pass those values along the output connections to all
     /// inputs of subsequent nodes.
-    pub fn propagate_input_values_forward(&mut self, out_node: NodeId) {
-        // 1st mutable borrow
-        let out_node_ptr = {
-            let out_node = self.flow_node_mut(out_node);
-            out_node.node.update_output_values(AccessToken::new());
-            out_node as *mut FlowNode<N>
+    pub fn process_inputs(&mut self, node_id: NodeId) {
+        let flow_node_ptr = {
+            let flow_node_ptr = self.flow_node_mut(node_id);
+            flow_node_ptr.node.process_inputs(AccessToken::new());
+            flow_node_ptr as *mut FlowNode<N>
         };
         // The 2nd mutable borrow is safe, because both nodes
         // are guaranteed to be disjunct and the flow graph
         // itself is not modified.
         #[allow(unused_unsafe)]
         unsafe {
-            for (out_port, in_socket) in &(*out_node_ptr).connected_outputs {
-                // 2nd mutable borrow
-                let out_node = &mut (*out_node_ptr).node;
-                let value = out_node.take_output_value(AccessToken::new(), *out_port);
-                let in_node = &mut self.flow_node_mut(in_socket.node).node;
-                in_node.put_input_value(AccessToken::new(), in_socket.port, value);
+            let node = &mut (*flow_node_ptr).node;
+            for (output_index, outgoing) in &(*flow_node_ptr).connected_outputs {
+                let packet = node.dispatch_output_packet(AccessToken::new(), *output_index);
+                let Socket {
+                    node_id: successor_node_id,
+                    port_index: successor_port_index,
+                } = *outgoing;
+                debug_assert_ne!(node_id, successor_node_id); // disjunct nodes!
+                let successor_node = &mut self.flow_node_mut(successor_node_id).node;
+                successor_node.receive_input_packet(
+                    AccessToken::new(),
+                    successor_port_index,
+                    packet,
+                );
             }
         }
     }

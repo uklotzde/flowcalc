@@ -21,5 +21,26 @@ pub mod node;
 /// TODO
 pub mod port;
 
+// Restricts the visibility of trait methods
 #[derive(Debug)]
 struct SealedTag;
+
+/// TODO
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum ActivityState {
+    /// TODO
+    Inactive,
+
+    /// TODO
+    Active,
+}
+
+/// A chunk of data that is moved between connected ports
+#[derive(Default, Debug, Clone, Copy)]
+pub struct Packet<T> {
+    /// The state of the sender
+    pub state: ActivityState,
+
+    /// The value that is moved from sender to receiver
+    pub value: Option<T>,
+}

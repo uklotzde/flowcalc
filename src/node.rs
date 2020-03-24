@@ -1,4 +1,8 @@
-use super::{port::{PortIndex, PortState}, flow::AccessToken};
+use super::{
+    flow::AccessToken,
+    port::{Port, PortIndex},
+    Packet,
+};
 
 use std::{cell::RefCell, fmt, rc::Rc};
 
@@ -10,29 +14,27 @@ pub trait Node<T>: fmt::Debug {
     /// Query the number of output ports
     fn num_outputs(&self) -> usize;
 
-    /// Query the state of an input port
-    fn input_state(&self, port: PortIndex) -> PortState;
+    /// TODO
+    fn receive_input_packet(
+        &mut self,
+        token: AccessToken,
+        input_index: PortIndex,
+        packet: Packet<T>,
+    );
 
-    /// Query the state of an output port
-    fn output_state(&self, port: PortIndex) -> PortState;
+    /// TODO
+    fn receive_output_packet(
+        &mut self,
+        token: AccessToken,
+        output_index: PortIndex,
+        packet: Packet<T>,
+    );
 
-    /// Modify the state of an input port
-    fn set_input_state(&mut self, token: AccessToken, port: PortIndex, state: PortState);
+    /// TODO
+    fn dispatch_input_packet(&mut self, token: AccessToken, input_index: PortIndex) -> Packet<T>;
 
-    /// Modify the state of an output port
-    fn set_output_state(&mut self, token: AccessToken, port: PortIndex, state: PortState);
-
-    /// Place an input value into the port
-    ///
-    /// The previous values (if any) is overwritten.
-    fn put_input_value(&mut self, token: AccessToken, port: PortIndex, value: Option<T>);
-
-    /// Consume an output value from the port
-    ///
-    /// Only a single invocation is permitted after the outputs
-    /// have been updated. Results of subsequent invocations are
-    /// undefined and supposed to return `None`.
-    fn take_output_value(&mut self, token: AccessToken, port: PortIndex) -> Option<T>;
+    /// TODO
+    fn dispatch_output_packet(&mut self, token: AccessToken, output_index: PortIndex) -> Packet<T>;
 
     /// Backward pass: Refresh the state of all inputs
     ///
@@ -42,7 +44,7 @@ pub trait Node<T>: fmt::Debug {
     /// This decision is made independent of whether the node needs
     /// to be updated or not. It must only take into account the pure
     /// functional dependencies between inputs and outputs.
-    fn refresh_input_states(&mut self, token: AccessToken);
+    fn process_outputs(&mut self, token: AccessToken);
 
     /// Forward pass: Update the values of all outputs
     ///
@@ -60,7 +62,7 @@ pub trait Node<T>: fmt::Debug {
     /// a result of consuming them. The current input values could
     /// still be cached internally for subsequent operations, e.g.
     /// to determine if input values have changed between invocations.
-    fn update_output_values(&mut self, token: AccessToken);
+    fn process_inputs(&mut self, token: AccessToken);
 }
 
 /// A reference-counted node proxy
@@ -88,35 +90,234 @@ where
         self.node.borrow().num_outputs()
     }
 
-    fn input_state(&self, port: PortIndex) -> PortState {
-        self.node.borrow().input_state(port)
+    fn receive_input_packet(
+        &mut self,
+        token: AccessToken,
+        input_index: PortIndex,
+        packet: Packet<T>,
+    ) {
+        self.node
+            .borrow_mut()
+            .receive_input_packet(token, input_index, packet)
     }
 
-    fn output_state(&self, port: PortIndex) -> PortState {
-        self.node.borrow().output_state(port)
+    fn receive_output_packet(
+        &mut self,
+        token: AccessToken,
+        output_index: PortIndex,
+        packet: Packet<T>,
+    ) {
+        self.node
+            .borrow_mut()
+            .receive_output_packet(token, output_index, packet)
     }
 
-    fn set_input_state(&mut self, token: AccessToken, port: PortIndex, state: PortState) {
-        self.node.borrow_mut().set_input_state(token, port, state)
+    fn dispatch_input_packet(&mut self, token: AccessToken, input_index: PortIndex) -> Packet<T> {
+        self.node
+            .borrow_mut()
+            .dispatch_input_packet(token, input_index)
     }
 
-    fn set_output_state(&mut self, token: AccessToken, port: PortIndex, state: PortState) {
-        self.node.borrow_mut().set_output_state(token, port, state)
+    fn dispatch_output_packet(&mut self, token: AccessToken, output_index: PortIndex) -> Packet<T> {
+        self.node
+            .borrow_mut()
+            .dispatch_output_packet(token, output_index)
     }
 
-    fn put_input_value(&mut self, token: AccessToken, port: PortIndex, value: Option<T>) {
-        self.node.borrow_mut().put_input_value(token, port, value)
+    fn process_outputs(&mut self, token: AccessToken) {
+        self.node.borrow_mut().process_outputs(token);
     }
 
-    fn take_output_value(&mut self, token: AccessToken, port: PortIndex) -> Option<T> {
-        self.node.borrow_mut().take_output_value(token, port)
+    fn process_inputs(&mut self, token: AccessToken) {
+        self.node.borrow_mut().process_inputs(token);
+    }
+}
+
+/// TODO
+#[derive(Default, Debug, Clone)]
+pub struct OneToManySplitterNode<T> {
+    input: Port<T>,
+    outputs: Vec<Port<T>>,
+}
+
+impl<T> OneToManySplitterNode<T> {
+    /// TODO
+    pub fn new(num_outputs: usize) -> Self {
+        let mut outputs = Vec::with_capacity(num_outputs);
+        for _ in 0..num_outputs {
+            outputs.push(Port::new());
+        }
+        Self {
+            input: Port::new(),
+            outputs,
+        }
     }
 
-    fn refresh_input_states(&mut self, token: AccessToken) {
-        self.node.borrow_mut().refresh_input_states(token);
+    /// TODO
+    pub fn input(&self) -> &Port<T> {
+        &self.input
     }
 
-    fn update_output_values(&mut self, token: AccessToken) {
-        self.node.borrow_mut().update_output_values(token);
+    /// TODO
+    pub fn input_mut(&mut self) -> &mut Port<T> {
+        &mut self.input
+    }
+
+    /// TODO
+    pub fn output(&self, output_index: PortIndex) -> &Port<T> {
+        debug_assert!(output_index < PortIndex::new(self.outputs.len()));
+        &self.outputs[usize::from(output_index)]
+    }
+
+    /// TODO
+    pub fn output_mut(&mut self, output_index: PortIndex) -> &mut Port<T> {
+        debug_assert!(output_index < PortIndex::new(self.outputs.len()));
+        &mut self.outputs[usize::from(output_index)]
+    }
+}
+
+impl<T> Node<T> for OneToManySplitterNode<T>
+where
+    T: Clone + fmt::Debug,
+{
+    fn num_inputs(&self) -> usize {
+        1
+    }
+
+    fn num_outputs(&self) -> usize {
+        self.outputs.len()
+    }
+
+    fn dispatch_input_packet(&mut self, _token: AccessToken, _input_index: PortIndex) -> Packet<T> {
+        debug_assert_eq!(PortIndex::new(0), _input_index);
+        self.input.dispatch_packet()
+    }
+
+    fn dispatch_output_packet(
+        &mut self,
+        _token: AccessToken,
+        output_index: PortIndex,
+    ) -> Packet<T> {
+        self.output_mut(output_index).dispatch_packet()
+    }
+
+    fn receive_input_packet(
+        &mut self,
+        _token: AccessToken,
+        _input_index: PortIndex,
+        packet: Packet<T>,
+    ) {
+        debug_assert_eq!(PortIndex::new(0), _input_index);
+        self.input.receive_packet(packet);
+    }
+
+    fn receive_output_packet(
+        &mut self,
+        _token: AccessToken,
+        output_index: PortIndex,
+        packet: Packet<T>,
+    ) {
+        self.output_mut(output_index).receive_packet(packet);
+    }
+
+    fn process_inputs(&mut self, _token: AccessToken) {
+        debug_assert!(self.input.is_active());
+        let input_value = self.input.slot.take();
+        for output in &mut self.outputs {
+            if !output.is_active() {
+                continue;
+            }
+            output.slot = input_value.clone();
+        }
+    }
+
+    fn process_outputs(&mut self, _: AccessToken) {
+        self.input
+            .activate(self.outputs.iter().any(|output| output.is_active()));
+    }
+}
+
+#[derive(Debug, Default, Clone)]
+/// TODO
+pub struct DebugPrinterSinkNode<T> {
+    inputs: Vec<Port<T>>,
+}
+
+impl<T> DebugPrinterSinkNode<T> {
+    /// TODO
+    pub fn new(num_inputs: usize) -> Self {
+        let mut inputs = Vec::with_capacity(num_inputs);
+        for _ in 0..num_inputs {
+            inputs.push(Port::new());
+        }
+        Self { inputs }
+    }
+
+    /// TODO
+    pub fn input(&self, input_index: PortIndex) -> &Port<T> {
+        &self.inputs[usize::from(input_index)]
+    }
+
+    /// TODO
+    pub fn input_mut(&mut self, input_index: PortIndex) -> &mut Port<T> {
+        &mut self.inputs[usize::from(input_index)]
+    }
+}
+
+impl<T> Node<T> for DebugPrinterSinkNode<T>
+where
+    T: fmt::Debug,
+{
+    fn num_inputs(&self) -> usize {
+        self.inputs.len()
+    }
+
+    fn num_outputs(&self) -> usize {
+        0
+    }
+
+    fn dispatch_input_packet(&mut self, _token: AccessToken, input_index: PortIndex) -> Packet<T> {
+        self.input_mut(input_index).dispatch_packet()
+    }
+
+    fn dispatch_output_packet(
+        &mut self,
+        _token: AccessToken,
+        _output_index: PortIndex,
+    ) -> Packet<T> {
+        unimplemented!();
+    }
+
+    fn receive_input_packet(
+        &mut self,
+        _token: AccessToken,
+        input_index: PortIndex,
+        packet: Packet<T>,
+    ) {
+        self.input_mut(input_index).receive_packet(packet);
+    }
+
+    fn receive_output_packet(
+        &mut self,
+        _token: AccessToken,
+        _output_index: PortIndex,
+        _packet: Packet<T>,
+    ) {
+        unimplemented!();
+    }
+
+    fn process_inputs(&mut self, _: AccessToken) {
+        // No outputs, just a side-effect
+        println!(
+            "{:?}",
+            self.inputs
+                .iter_mut()
+                .map(|input| input.slot.take())
+                .collect::<Vec<_>>()
+        );
+    }
+
+    fn process_outputs(&mut self, _: AccessToken) {
+        // No outputs, nothing to do
     }
 }
