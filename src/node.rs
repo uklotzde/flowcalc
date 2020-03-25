@@ -7,16 +7,16 @@ use super::{
 use std::{cell::RefCell, fmt, rc::Rc};
 
 /// TODO
-pub trait Processor: fmt::Debug {
+pub trait Processor {
     /// Process the current contents from all ports
     fn process(&mut self, token: AccessToken);
 }
 
 /// TODO
-pub trait SemiNode<T>: Processor + PortBay<T> + fmt::Debug {}
+pub trait SemiNode<T>: Processor + PortBay<T> {}
 
 /// TODO
-pub trait FullNode<T>: fmt::Debug {
+pub trait FullNode<T> {
     /// TODO
     type Input: SemiNode<T>;
 
@@ -37,7 +37,7 @@ pub trait FullNode<T>: fmt::Debug {
 }
 
 /// TODO
-pub trait NodeProcessor: fmt::Debug {
+pub trait NodeProcessor {
     /// Backward pass: Refresh the state of all inputs
     ///
     /// Propagate port states from outputs backwards to all inputs
@@ -68,7 +68,7 @@ pub trait NodeProcessor: fmt::Debug {
 }
 
 /// TODO
-pub trait Node<T>: NodeProcessor + fmt::Debug {
+pub trait Node<T>: NodeProcessor {
     /// Query the number of input ports
     fn num_inputs(&self) -> usize;
 
@@ -99,7 +99,8 @@ pub trait Node<T>: NodeProcessor + fmt::Debug {
 }
 
 /// A reference-counted node proxy
-#[derive(Debug, Clone)]
+#[derive(Clone)]
+#[allow(missing_debug_implementations)]
 pub struct RcProxyNode<T> {
     node: Rc<RefCell<dyn Node<T>>>,
 }
@@ -173,12 +174,12 @@ where
 
 /// TODO
 #[derive(Default, Debug, Clone)]
-pub struct OneToManySplitterNode<T> {
+pub struct OneToManySplitter<T> {
     input: Port<T>,
     outputs: VecPortBay<T>,
 }
 
-impl<T> OneToManySplitterNode<T> {
+impl<T> OneToManySplitter<T> {
     /// TODO
     pub fn new(num_outputs: usize) -> Self {
         Self {
@@ -208,7 +209,7 @@ impl<T> OneToManySplitterNode<T> {
     }
 }
 
-impl<T> Node<T> for OneToManySplitterNode<T>
+impl<T> Node<T> for OneToManySplitter<T>
 where
     T: Clone + fmt::Debug,
 {
@@ -253,7 +254,7 @@ where
     }
 }
 
-impl<T> NodeProcessor for OneToManySplitterNode<T>
+impl<T> NodeProcessor for OneToManySplitter<T>
 where
     T: Clone + fmt::Debug,
 {
@@ -279,11 +280,12 @@ where
 
 #[derive(Debug, Default, Clone)]
 /// TODO
-pub struct DebugPrinterSinkNode<T> {
-    inputs: VecPortBay<T>,
+pub struct DebugPrinterSink<T> {
+    /// TODO
+    pub inputs: VecPortBay<T>,
 }
 
-impl<T> DebugPrinterSinkNode<T> {
+impl<T> DebugPrinterSink<T> {
     /// TODO
     pub fn new(num_inputs: usize) -> Self {
         Self {
@@ -302,7 +304,7 @@ impl<T> DebugPrinterSinkNode<T> {
     }
 }
 
-impl<T> Node<T> for DebugPrinterSinkNode<T>
+impl<T> Node<T> for DebugPrinterSink<T>
 where
     T: fmt::Debug,
 {
@@ -345,7 +347,7 @@ where
     }
 }
 
-impl<T> NodeProcessor for DebugPrinterSinkNode<T>
+impl<T> NodeProcessor for DebugPrinterSink<T>
 where
     T: fmt::Debug,
 {

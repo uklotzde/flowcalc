@@ -185,11 +185,19 @@ impl NodeProcessor for CalculatorNode {
 }
 
 fn main() {
+    use rand::Rng;
+    let mut rng = rand::thread_rng();
+    let chars: String = std::iter::repeat(())
+            .map(|()| rng.sample(rand::distributions::Alphanumeric))
+            .take(20)
+            .collect();
+    println!("Random chars: {}", chars);
+
     let calculator = Rc::new(RefCell::new(CalculatorNode::default()));
-    let splitter = Rc::new(RefCell::new(OneToManySplitterNode::<f64>::new(
+    let splitter = Rc::new(RefCell::new(OneToManySplitter::<f64>::new(
         calculator.borrow().num_inputs(),
     )));
-    let printer = Rc::new(RefCell::new(DebugPrinterSinkNode::<f64>::new(
+    let printer = Rc::new(RefCell::new(DebugPrinterSink::<f64>::new(
         calculator.borrow().num_outputs(),
     )));
     // Print only selected outputs from the calculator

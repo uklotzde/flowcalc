@@ -13,7 +13,10 @@ edition = "2018"
 [dependencies]
 #petgraph = "0.5"
 
-#[dev-dependencies]
-#bardecoder = "*"
-#image = "*"
-#qrcode = "*"
+[dev-dependencies]
+bardecoder = "*"
+image = "0.22"
+qrcodegen = "*"
+rand = "*"
+resvg = { version = "*", features = ["raqote-backend"] }
+usvg = "*"
