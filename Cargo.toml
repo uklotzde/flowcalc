@@ -10,13 +10,13 @@ repository = "https://github.com/uklotzde/flowcalc"
 categories = ["algorithms", "data-structures"]
 edition = "2018"
 
+[patch.crates-io]
+
 [dependencies]
 #petgraph = "0.5"
 
 [dev-dependencies]
-bardecoder = "*"
-image = "0.22"
-qrcodegen = "*"
+bardecoder = { version = "*", git = 'https://github.com/uklotzde/bardecoder.git', branch = 'devel' }
+image = "0.23"
+qrcode = "*"
 rand = "*"
-resvg = { version = "*", features = ["raqote-backend"] }
-usvg = "*"
