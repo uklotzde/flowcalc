@@ -7,6 +7,42 @@ use super::{
 use std::{cell::RefCell, fmt, rc::Rc};
 
 /// TODO
+pub trait SemiNode<T>: fmt::Debug {
+    /// Query the number of ports
+    fn num_ports(&self) -> usize;
+
+    /// TODO
+    fn receive_packet(&mut self, token: AccessToken, port_index: PortIndex, packet: Packet<T>);
+
+    /// TODO
+    fn dispatch_packet(&mut self, token: AccessToken, port_index: PortIndex) -> Packet<T>;
+
+    /// TODO
+    fn process_packet(&mut self, token: AccessToken);
+}
+
+/// TODO
+pub trait FullNode<T>: fmt::Debug {
+    /// TODO
+    type Input: SemiNode<T>;
+
+    /// TODO
+    type Output: SemiNode<T>;
+
+    /// TODO
+    fn input(&self) -> &Self::Input;
+
+    /// TODO
+    fn input_mut(&self) -> &mut Self::Input;
+
+    /// TODO
+    fn output(&self) -> &Self::Input;
+
+    /// TODO
+    fn output_mut(&self) -> &mut Self::Input;
+}
+
+/// TODO
 pub trait Node<T>: fmt::Debug {
     /// Query the number of input ports
     fn num_inputs(&self) -> usize;
