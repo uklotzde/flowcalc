@@ -18,7 +18,7 @@ pub trait SemiNode<T>: fmt::Debug {
     fn dispatch_packet(&mut self, token: AccessToken, port_index: PortIndex) -> Packet<T>;
 
     /// TODO
-    fn process_packet(&mut self, token: AccessToken);
+    fn process_packets(&mut self, token: AccessToken);
 }
 
 /// TODO
@@ -43,35 +43,7 @@ pub trait FullNode<T>: fmt::Debug {
 }
 
 /// TODO
-pub trait Node<T>: fmt::Debug {
-    /// Query the number of input ports
-    fn num_inputs(&self) -> usize;
-
-    /// Query the number of output ports
-    fn num_outputs(&self) -> usize;
-
-    /// TODO
-    fn receive_input_packet(
-        &mut self,
-        token: AccessToken,
-        input_index: PortIndex,
-        packet: Packet<T>,
-    );
-
-    /// TODO
-    fn receive_output_packet(
-        &mut self,
-        token: AccessToken,
-        output_index: PortIndex,
-        packet: Packet<T>,
-    );
-
-    /// TODO
-    fn dispatch_input_packet(&mut self, token: AccessToken, input_index: PortIndex) -> Packet<T>;
-
-    /// TODO
-    fn dispatch_output_packet(&mut self, token: AccessToken, output_index: PortIndex) -> Packet<T>;
-
+pub trait Processor: fmt::Debug {
     /// Backward pass: Refresh the state of all inputs
     ///
     /// Propagate port states from outputs backwards to all inputs
@@ -99,6 +71,37 @@ pub trait Node<T>: fmt::Debug {
     /// still be cached internally for subsequent operations, e.g.
     /// to determine if input values have changed between invocations.
     fn process_inputs(&mut self, token: AccessToken);
+}
+
+/// TODO
+pub trait Node<T>: Processor + fmt::Debug {
+    /// Query the number of input ports
+    fn num_inputs(&self) -> usize;
+
+    /// Query the number of output ports
+    fn num_outputs(&self) -> usize;
+
+    /// TODO
+    fn receive_input_packet(
+        &mut self,
+        token: AccessToken,
+        input_index: PortIndex,
+        packet: Packet<T>,
+    );
+
+    /// TODO
+    fn receive_output_packet(
+        &mut self,
+        token: AccessToken,
+        output_index: PortIndex,
+        packet: Packet<T>,
+    );
+
+    /// TODO
+    fn dispatch_input_packet(&mut self, token: AccessToken, input_index: PortIndex) -> Packet<T>;
+
+    /// TODO
+    fn dispatch_output_packet(&mut self, token: AccessToken, output_index: PortIndex) -> Packet<T>;
 }
 
 /// A reference-counted node proxy
@@ -159,7 +162,12 @@ where
             .borrow_mut()
             .dispatch_output_packet(token, output_index)
     }
+}
 
+impl<T> Processor for RcProxyNode<T>
+where
+    T: fmt::Debug,
+{
     fn process_outputs(&mut self, token: AccessToken) {
         self.node.borrow_mut().process_outputs(token);
     }
@@ -255,7 +263,12 @@ where
     ) {
         self.output_mut(output_index).receive_packet(packet);
     }
+}
 
+impl<T> Processor for OneToManySplitterNode<T>
+where
+    T: Clone + fmt::Debug,
+{
     fn process_inputs(&mut self, _token: AccessToken) {
         debug_assert!(self.input.is_active());
         let input_value = self.input.slot.take();
@@ -341,7 +354,12 @@ where
     ) {
         unimplemented!();
     }
+}
 
+impl<T> Processor for DebugPrinterSinkNode<T>
+where
+    T: fmt::Debug,
+{
     fn process_inputs(&mut self, _: AccessToken) {
         // No outputs, just a side-effect
         println!(

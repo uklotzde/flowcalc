@@ -108,7 +108,9 @@ impl Node<f64> for CalculatorNode {
     ) {
         self.output_mut(output_index).receive_packet(packet);
     }
+}
 
+impl Processor for CalculatorNode {
     fn process_inputs(&mut self, _: AccessToken) {
         let lhs_input_value = self.input_mut(Self::input_index_lhs()).slot.take();
         let rhs_input_value = self.input_mut(Self::input_index_rhs()).slot.take();
