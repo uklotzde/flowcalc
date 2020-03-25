@@ -290,7 +290,7 @@ where
                 } = *incoming;
                 debug_assert_ne!(node_id, predecessor_node_id); // disjunct nodes!
                 let predecessor_node = &mut self.flow_node_mut(predecessor_node_id).node;
-                predecessor_node.receive_output_packet(
+                predecessor_node.accept_output_packet(
                     AccessToken::new(),
                     predecessor_port_index,
                     packet,
@@ -324,7 +324,7 @@ where
                 } = *outgoing;
                 debug_assert_ne!(node_id, successor_node_id); // disjunct nodes!
                 let successor_node = &mut self.flow_node_mut(successor_node_id).node;
-                successor_node.receive_input_packet(
+                successor_node.accept_input_packet(
                     AccessToken::new(),
                     successor_port_index,
                     packet,

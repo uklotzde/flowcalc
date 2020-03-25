@@ -1,25 +1,19 @@
 use super::{
     flow::AccessToken,
-    port::{Port, PortIndex},
+    port::{Port, PortBay, PortIndex, VecPortBay},
     Packet,
 };
 
 use std::{cell::RefCell, fmt, rc::Rc};
 
 /// TODO
-pub trait SemiNode<T>: fmt::Debug {
-    /// Query the number of ports
-    fn num_ports(&self) -> usize;
-
-    /// TODO
-    fn receive_packet(&mut self, token: AccessToken, port_index: PortIndex, packet: Packet<T>);
-
-    /// TODO
-    fn dispatch_packet(&mut self, token: AccessToken, port_index: PortIndex) -> Packet<T>;
-
-    /// TODO
-    fn process_packets(&mut self, token: AccessToken);
+pub trait Processor: fmt::Debug {
+    /// Process the current contents from all ports
+    fn process(&mut self, token: AccessToken);
 }
+
+/// TODO
+pub trait SemiNode<T>: Processor + PortBay<T> + fmt::Debug {}
 
 /// TODO
 pub trait FullNode<T>: fmt::Debug {
@@ -43,7 +37,7 @@ pub trait FullNode<T>: fmt::Debug {
 }
 
 /// TODO
-pub trait Processor: fmt::Debug {
+pub trait NodeProcessor: fmt::Debug {
     /// Backward pass: Refresh the state of all inputs
     ///
     /// Propagate port states from outputs backwards to all inputs
@@ -74,7 +68,7 @@ pub trait Processor: fmt::Debug {
 }
 
 /// TODO
-pub trait Node<T>: Processor + fmt::Debug {
+pub trait Node<T>: NodeProcessor + fmt::Debug {
     /// Query the number of input ports
     fn num_inputs(&self) -> usize;
 
@@ -82,7 +76,7 @@ pub trait Node<T>: Processor + fmt::Debug {
     fn num_outputs(&self) -> usize;
 
     /// TODO
-    fn receive_input_packet(
+    fn accept_input_packet(
         &mut self,
         token: AccessToken,
         input_index: PortIndex,
@@ -90,7 +84,7 @@ pub trait Node<T>: Processor + fmt::Debug {
     );
 
     /// TODO
-    fn receive_output_packet(
+    fn accept_output_packet(
         &mut self,
         token: AccessToken,
         output_index: PortIndex,
@@ -129,7 +123,7 @@ where
         self.node.borrow().num_outputs()
     }
 
-    fn receive_input_packet(
+    fn accept_input_packet(
         &mut self,
         token: AccessToken,
         input_index: PortIndex,
@@ -137,10 +131,10 @@ where
     ) {
         self.node
             .borrow_mut()
-            .receive_input_packet(token, input_index, packet)
+            .accept_input_packet(token, input_index, packet)
     }
 
-    fn receive_output_packet(
+    fn accept_output_packet(
         &mut self,
         token: AccessToken,
         output_index: PortIndex,
@@ -148,7 +142,7 @@ where
     ) {
         self.node
             .borrow_mut()
-            .receive_output_packet(token, output_index, packet)
+            .accept_output_packet(token, output_index, packet)
     }
 
     fn dispatch_input_packet(&mut self, token: AccessToken, input_index: PortIndex) -> Packet<T> {
@@ -164,7 +158,7 @@ where
     }
 }
 
-impl<T> Processor for RcProxyNode<T>
+impl<T> NodeProcessor for RcProxyNode<T>
 where
     T: fmt::Debug,
 {
@@ -181,19 +175,15 @@ where
 #[derive(Default, Debug, Clone)]
 pub struct OneToManySplitterNode<T> {
     input: Port<T>,
-    outputs: Vec<Port<T>>,
+    outputs: VecPortBay<T>,
 }
 
 impl<T> OneToManySplitterNode<T> {
     /// TODO
     pub fn new(num_outputs: usize) -> Self {
-        let mut outputs = Vec::with_capacity(num_outputs);
-        for _ in 0..num_outputs {
-            outputs.push(Port::new());
-        }
         Self {
             input: Port::new(),
-            outputs,
+            outputs: VecPortBay::new(num_outputs),
         }
     }
 
@@ -209,14 +199,12 @@ impl<T> OneToManySplitterNode<T> {
 
     /// TODO
     pub fn output(&self, output_index: PortIndex) -> &Port<T> {
-        debug_assert!(output_index < PortIndex::new(self.outputs.len()));
-        &self.outputs[usize::from(output_index)]
+        self.outputs.port(output_index)
     }
 
     /// TODO
     pub fn output_mut(&mut self, output_index: PortIndex) -> &mut Port<T> {
-        debug_assert!(output_index < PortIndex::new(self.outputs.len()));
-        &mut self.outputs[usize::from(output_index)]
+        self.outputs.port_mut(output_index)
     }
 }
 
@@ -229,7 +217,26 @@ where
     }
 
     fn num_outputs(&self) -> usize {
-        self.outputs.len()
+        self.outputs.num_ports()
+    }
+
+    fn accept_input_packet(
+        &mut self,
+        _token: AccessToken,
+        _input_index: PortIndex,
+        packet: Packet<T>,
+    ) {
+        debug_assert_eq!(PortIndex::new(0), _input_index);
+        self.input.accept_packet(packet);
+    }
+
+    fn accept_output_packet(
+        &mut self,
+        _token: AccessToken,
+        output_index: PortIndex,
+        packet: Packet<T>,
+    ) {
+        self.outputs.accept_packet(output_index, packet)
     }
 
     fn dispatch_input_packet(&mut self, _token: AccessToken, _input_index: PortIndex) -> Packet<T> {
@@ -242,74 +249,56 @@ where
         _token: AccessToken,
         output_index: PortIndex,
     ) -> Packet<T> {
-        self.output_mut(output_index).dispatch_packet()
-    }
-
-    fn receive_input_packet(
-        &mut self,
-        _token: AccessToken,
-        _input_index: PortIndex,
-        packet: Packet<T>,
-    ) {
-        debug_assert_eq!(PortIndex::new(0), _input_index);
-        self.input.receive_packet(packet);
-    }
-
-    fn receive_output_packet(
-        &mut self,
-        _token: AccessToken,
-        output_index: PortIndex,
-        packet: Packet<T>,
-    ) {
-        self.output_mut(output_index).receive_packet(packet);
+        self.outputs.dispatch_packet(output_index)
     }
 }
 
-impl<T> Processor for OneToManySplitterNode<T>
+impl<T> NodeProcessor for OneToManySplitterNode<T>
 where
     T: Clone + fmt::Debug,
 {
     fn process_inputs(&mut self, _token: AccessToken) {
         debug_assert!(self.input.is_active());
         let input_value = self.input.slot.take();
-        for output in &mut self.outputs {
-            if !output.is_active() {
+        for output_port in self.outputs.ports_mut() {
+            if !output_port.is_active() {
                 continue;
             }
-            output.slot = input_value.clone();
+            output_port.slot = input_value.clone();
         }
     }
 
     fn process_outputs(&mut self, _: AccessToken) {
-        self.input
-            .activate(self.outputs.iter().any(|output| output.is_active()));
+        self.input.activate(
+            self.outputs
+                .ports()
+                .any(|output_port| output_port.is_active()),
+        );
     }
 }
 
 #[derive(Debug, Default, Clone)]
 /// TODO
 pub struct DebugPrinterSinkNode<T> {
-    inputs: Vec<Port<T>>,
+    inputs: VecPortBay<T>,
 }
 
 impl<T> DebugPrinterSinkNode<T> {
     /// TODO
     pub fn new(num_inputs: usize) -> Self {
-        let mut inputs = Vec::with_capacity(num_inputs);
-        for _ in 0..num_inputs {
-            inputs.push(Port::new());
+        Self {
+            inputs: VecPortBay::new(num_inputs),
         }
-        Self { inputs }
     }
 
     /// TODO
     pub fn input(&self, input_index: PortIndex) -> &Port<T> {
-        &self.inputs[usize::from(input_index)]
+        self.inputs.port(input_index)
     }
 
     /// TODO
     pub fn input_mut(&mut self, input_index: PortIndex) -> &mut Port<T> {
-        &mut self.inputs[usize::from(input_index)]
+        self.inputs.port_mut(input_index)
     }
 }
 
@@ -318,15 +307,33 @@ where
     T: fmt::Debug,
 {
     fn num_inputs(&self) -> usize {
-        self.inputs.len()
+        self.inputs.num_ports()
     }
 
     fn num_outputs(&self) -> usize {
         0
     }
 
+    fn accept_input_packet(
+        &mut self,
+        _token: AccessToken,
+        input_index: PortIndex,
+        packet: Packet<T>,
+    ) {
+        self.inputs.accept_packet(input_index, packet);
+    }
+
+    fn accept_output_packet(
+        &mut self,
+        _token: AccessToken,
+        _output_index: PortIndex,
+        _packet: Packet<T>,
+    ) {
+        unimplemented!();
+    }
+
     fn dispatch_input_packet(&mut self, _token: AccessToken, input_index: PortIndex) -> Packet<T> {
-        self.input_mut(input_index).dispatch_packet()
+        self.inputs.dispatch_packet(input_index)
     }
 
     fn dispatch_output_packet(
@@ -336,27 +343,9 @@ where
     ) -> Packet<T> {
         unimplemented!();
     }
-
-    fn receive_input_packet(
-        &mut self,
-        _token: AccessToken,
-        input_index: PortIndex,
-        packet: Packet<T>,
-    ) {
-        self.input_mut(input_index).receive_packet(packet);
-    }
-
-    fn receive_output_packet(
-        &mut self,
-        _token: AccessToken,
-        _output_index: PortIndex,
-        _packet: Packet<T>,
-    ) {
-        unimplemented!();
-    }
 }
 
-impl<T> Processor for DebugPrinterSinkNode<T>
+impl<T> NodeProcessor for DebugPrinterSinkNode<T>
 where
     T: fmt::Debug,
 {
@@ -365,8 +354,8 @@ where
         println!(
             "{:?}",
             self.inputs
-                .iter_mut()
-                .map(|input| input.slot.take())
+                .ports_mut()
+                .map(|port| port.slot.take())
                 .collect::<Vec<_>>()
         );
     }

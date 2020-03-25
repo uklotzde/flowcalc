@@ -91,26 +91,26 @@ impl Node<f64> for CalculatorNode {
         self.output_mut(output_index).dispatch_packet()
     }
 
-    fn receive_input_packet(
+    fn accept_input_packet(
         &mut self,
         _token: AccessToken,
         input_index: PortIndex,
         packet: Packet<f64>,
     ) {
-        self.input_mut(input_index).receive_packet(packet);
+        self.input_mut(input_index).accept_packet(packet);
     }
 
-    fn receive_output_packet(
+    fn accept_output_packet(
         &mut self,
         _token: AccessToken,
         output_index: PortIndex,
         packet: Packet<f64>,
     ) {
-        self.output_mut(output_index).receive_packet(packet);
+        self.output_mut(output_index).accept_packet(packet);
     }
 }
 
-impl Processor for CalculatorNode {
+impl NodeProcessor for CalculatorNode {
     fn process_inputs(&mut self, _: AccessToken) {
         let lhs_input_value = self.input_mut(Self::input_index_lhs()).slot.take();
         let rhs_input_value = self.input_mut(Self::input_index_rhs()).slot.take();
