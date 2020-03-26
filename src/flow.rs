@@ -23,7 +23,6 @@ impl AccessToken {
 pub struct NodeId(usize);
 
 impl NodeId {
-    /// TODO
     fn new(index: usize) -> Self {
         Self(index)
     }
@@ -57,9 +56,10 @@ struct FlowNode<N> {
 
 /// Directed acyclic graph (DAG) of computational nodes
 #[derive(Debug, Default)]
-pub struct Flow<N, T> {
+pub struct Flow<N, S, P> {
     nodes: Vec<FlowNode<N>>,
-    phantom: PhantomData<T>,
+    phantom1: PhantomData<S>,
+    phantom2: PhantomData<P>,
 }
 
 /// Detected cycle
@@ -75,27 +75,26 @@ impl Cycle {
     }
 }
 
-impl<N, T> Flow<N, T>
+impl<N, S, P> Flow<N, S, P>
 where
-    N: Node<T>,
+    N: Node<S, P>,
 {
-    /// TODO
     pub fn new() -> Self {
         Self {
             nodes: Vec::new(),
-            phantom: PhantomData,
+            phantom1: PhantomData,
+            phantom2: PhantomData,
         }
     }
 
-    /// TODO
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
             nodes: Vec::with_capacity(capacity),
-            phantom: PhantomData,
+            phantom1: PhantomData,
+            phantom2: PhantomData,
         }
     }
 
-    /// TODO
     pub fn add_node(&mut self, node: N) -> NodeId {
         let new_node = FlowNode {
             node,
@@ -106,12 +105,10 @@ where
         NodeId::new(self.nodes.len() - 1)
     }
 
-    /// TODO
     pub fn node(&self, node_id: NodeId) -> &N {
         &self.flow_node(node_id).node
     }
 
-    /// TODO
     pub fn node_mut(&mut self, node_id: NodeId) -> &mut N {
         &mut self.flow_node_mut(node_id).node
     }
@@ -200,7 +197,6 @@ where
         debug_assert!(self.topological_nodes().is_ok());
     }
 
-    /// TODO
     pub fn reconnect(&mut self, output: Socket, input: Socket) {
         self.disconnect_output(output);
         self.disconnect_input(input);
@@ -283,18 +279,20 @@ where
         unsafe {
             let node = &mut (*flow_node_ptr).node;
             for (input_index, incoming) in &(*flow_node_ptr).connected_inputs {
-                let packet = node.dispatch_input_packet(AccessToken::new(), *input_index);
-                let Socket {
-                    node_id: predecessor_node_id,
-                    port_index: predecessor_port_index,
-                } = *incoming;
-                debug_assert_ne!(node_id, predecessor_node_id); // disjunct nodes!
-                let predecessor_node = &mut self.flow_node_mut(predecessor_node_id).node;
-                predecessor_node.accept_output_packet(
-                    AccessToken::new(),
-                    predecessor_port_index,
-                    packet,
-                );
+                let packet = node.dispatch_input_ctrlgram(AccessToken::new(), *input_index);
+                if let Some(packet) = packet {
+                    let Socket {
+                        node_id: predecessor_node_id,
+                        port_index: predecessor_port_index,
+                    } = *incoming;
+                    debug_assert_ne!(node_id, predecessor_node_id); // disjunct nodes!
+                    let predecessor_node = &mut self.flow_node_mut(predecessor_node_id).node;
+                    predecessor_node.accept_output_ctrlgram(
+                        AccessToken::new(),
+                        predecessor_port_index,
+                        packet,
+                    );
+                }
             }
         }
     }
@@ -317,18 +315,20 @@ where
         unsafe {
             let node = &mut (*flow_node_ptr).node;
             for (output_index, outgoing) in &(*flow_node_ptr).connected_outputs {
-                let packet = node.dispatch_output_packet(AccessToken::new(), *output_index);
-                let Socket {
-                    node_id: successor_node_id,
-                    port_index: successor_port_index,
-                } = *outgoing;
-                debug_assert_ne!(node_id, successor_node_id); // disjunct nodes!
-                let successor_node = &mut self.flow_node_mut(successor_node_id).node;
-                successor_node.accept_input_packet(
-                    AccessToken::new(),
-                    successor_port_index,
-                    packet,
-                );
+                let packet = node.dispatch_output_datagram(AccessToken::new(), *output_index);
+                if let Some(packet) = packet {
+                    let Socket {
+                        node_id: successor_node_id,
+                        port_index: successor_port_index,
+                    } = *outgoing;
+                    debug_assert_ne!(node_id, successor_node_id); // disjunct nodes!
+                    let successor_node = &mut self.flow_node_mut(successor_node_id).node;
+                    successor_node.accept_input_datagram(
+                        AccessToken::new(),
+                        successor_port_index,
+                        packet,
+                    );
+                }
             }
         }
     }

@@ -1,42 +1,31 @@
 use super::{
     flow::AccessToken,
-    port::{Port, PortBay, PortIndex, VecPortBay},
-    Packet,
+    port::{Ctrlgram, Datagram, Port, PortBay, PortIndex, PortStatus, VecPortBay},
 };
 
 use std::{cell::RefCell, fmt, rc::Rc};
 
-/// TODO
 pub trait Processor {
     /// Process the current contents from all ports
     fn process(&mut self, token: AccessToken);
 }
 
-/// TODO
-pub trait SemiNode<T>: Processor + PortBay<T> {}
+pub trait SemiNode<C, D>: Processor + PortBay<C, D> {}
 
-/// TODO
-pub trait FullNode<T> {
-    /// TODO
-    type Input: SemiNode<T>;
+pub trait FullNode<C, D> {
+    type Input: SemiNode<C, D>;
 
-    /// TODO
-    type Output: SemiNode<T>;
+    type Output: SemiNode<C, D>;
 
-    /// TODO
     fn input(&self) -> &Self::Input;
 
-    /// TODO
     fn input_mut(&self) -> &mut Self::Input;
 
-    /// TODO
     fn output(&self) -> &Self::Input;
 
-    /// TODO
     fn output_mut(&self) -> &mut Self::Input;
 }
 
-/// TODO
 pub trait NodeProcessor {
     /// Backward pass: Refresh the state of all inputs
     ///
@@ -67,55 +56,55 @@ pub trait NodeProcessor {
     fn process_inputs(&mut self, token: AccessToken);
 }
 
-/// TODO
-pub trait Node<T>: NodeProcessor {
+pub trait Node<C, D>: NodeProcessor {
     /// Query the number of input ports
     fn num_inputs(&self) -> usize;
 
     /// Query the number of output ports
     fn num_outputs(&self) -> usize;
 
-    /// TODO
-    fn accept_input_packet(
+    fn accept_input_datagram(
         &mut self,
         token: AccessToken,
         input_index: PortIndex,
-        packet: Packet<T>,
+        packet: Datagram<C, D>,
     );
 
-    /// TODO
-    fn accept_output_packet(
+    fn accept_output_ctrlgram(
         &mut self,
         token: AccessToken,
         output_index: PortIndex,
-        packet: Packet<T>,
+        packet: Ctrlgram<C, D>,
     );
 
-    /// TODO
-    fn dispatch_input_packet(&mut self, token: AccessToken, input_index: PortIndex) -> Packet<T>;
+    fn dispatch_input_ctrlgram(
+        &mut self,
+        token: AccessToken,
+        input_index: PortIndex,
+    ) -> Option<Ctrlgram<C, D>>;
 
-    /// TODO
-    fn dispatch_output_packet(&mut self, token: AccessToken, output_index: PortIndex) -> Packet<T>;
+    fn dispatch_output_datagram(
+        &mut self,
+        token: AccessToken,
+        output_index: PortIndex,
+    ) -> Option<Datagram<C, D>>;
 }
 
 /// A reference-counted node proxy
 #[derive(Clone)]
 #[allow(missing_debug_implementations)]
-pub struct RcProxyNode<T> {
-    node: Rc<RefCell<dyn Node<T>>>,
+pub struct RcProxyNode<C, D> {
+    node: Rc<RefCell<dyn Node<C, D>>>,
 }
 
-impl<T> RcProxyNode<T> {
+impl<C, D> RcProxyNode<C, D> {
     /// Create a new proxy node by wrapping a shared node
-    pub fn new(node: Rc<RefCell<dyn Node<T>>>) -> Self {
+    pub fn new(node: Rc<RefCell<dyn Node<C, D>>>) -> Self {
         Self { node }
     }
 }
 
-impl<T> Node<T> for RcProxyNode<T>
-where
-    T: fmt::Debug,
-{
+impl<C, D> Node<C, D> for RcProxyNode<C, D> {
     fn num_inputs(&self) -> usize {
         self.node.borrow().num_inputs()
     }
@@ -124,45 +113,50 @@ where
         self.node.borrow().num_outputs()
     }
 
-    fn accept_input_packet(
+    fn accept_input_datagram(
         &mut self,
         token: AccessToken,
         input_index: PortIndex,
-        packet: Packet<T>,
+        packet: Datagram<C, D>,
     ) {
         self.node
             .borrow_mut()
-            .accept_input_packet(token, input_index, packet)
+            .accept_input_datagram(token, input_index, packet)
     }
 
-    fn accept_output_packet(
+    fn accept_output_ctrlgram(
         &mut self,
         token: AccessToken,
         output_index: PortIndex,
-        packet: Packet<T>,
+        packet: Ctrlgram<C, D>,
     ) {
         self.node
             .borrow_mut()
-            .accept_output_packet(token, output_index, packet)
+            .accept_output_ctrlgram(token, output_index, packet)
     }
 
-    fn dispatch_input_packet(&mut self, token: AccessToken, input_index: PortIndex) -> Packet<T> {
+    fn dispatch_input_ctrlgram(
+        &mut self,
+        token: AccessToken,
+        input_index: PortIndex,
+    ) -> Option<Ctrlgram<C, D>> {
         self.node
             .borrow_mut()
-            .dispatch_input_packet(token, input_index)
+            .dispatch_input_ctrlgram(token, input_index)
     }
 
-    fn dispatch_output_packet(&mut self, token: AccessToken, output_index: PortIndex) -> Packet<T> {
+    fn dispatch_output_datagram(
+        &mut self,
+        token: AccessToken,
+        output_index: PortIndex,
+    ) -> Option<Datagram<C, D>> {
         self.node
             .borrow_mut()
-            .dispatch_output_packet(token, output_index)
+            .dispatch_output_datagram(token, output_index)
     }
 }
 
-impl<T> NodeProcessor for RcProxyNode<T>
-where
-    T: fmt::Debug,
-{
+impl<C, D> NodeProcessor for RcProxyNode<C, D> {
     fn process_outputs(&mut self, token: AccessToken) {
         self.node.borrow_mut().process_outputs(token);
     }
@@ -172,15 +166,33 @@ where
     }
 }
 
-/// TODO
-#[derive(Default, Debug, Clone)]
-pub struct OneToManySplitter<T> {
-    input: Port<T>,
-    outputs: VecPortBay<T>,
+pub trait JoinablePortControl {
+    fn join_next_port_control(self, next_ctrl: Option<&Self>) -> Self;
 }
 
-impl<T> OneToManySplitter<T> {
-    /// TODO
+impl JoinablePortControl for () {
+    fn join_next_port_control(self, _next_ctrl: Option<&Self>) -> Self {
+        self
+    }
+}
+
+impl JoinablePortControl for bool {
+    fn join_next_port_control(self, next_ctrl: Option<&Self>) -> Self {
+        if let Some(next_ctrl) = next_ctrl {
+            self || *next_ctrl
+        } else {
+            self
+        }
+    }
+}
+
+#[derive(Default, Debug, Clone)]
+pub struct OneToManySplitter<C, D> {
+    input: Port<C, D>,
+    outputs: VecPortBay<C, D>,
+}
+
+impl<C, D> OneToManySplitter<C, D> {
     pub fn new(num_outputs: usize) -> Self {
         Self {
             input: Port::new(),
@@ -188,30 +200,27 @@ impl<T> OneToManySplitter<T> {
         }
     }
 
-    /// TODO
-    pub fn input(&self) -> &Port<T> {
+    pub fn input(&self) -> &Port<C, D> {
         &self.input
     }
 
-    /// TODO
-    pub fn input_mut(&mut self) -> &mut Port<T> {
+    pub fn input_mut(&mut self) -> &mut Port<C, D> {
         &mut self.input
     }
 
-    /// TODO
-    pub fn output(&self, output_index: PortIndex) -> &Port<T> {
+    pub fn output(&self, output_index: PortIndex) -> &Port<C, D> {
         self.outputs.port(output_index)
     }
 
-    /// TODO
-    pub fn output_mut(&mut self, output_index: PortIndex) -> &mut Port<T> {
+    pub fn output_mut(&mut self, output_index: PortIndex) -> &mut Port<C, D> {
         self.outputs.port_mut(output_index)
     }
 }
 
-impl<T> Node<T> for OneToManySplitter<T>
+impl<C, D> Node<C, D> for OneToManySplitter<C, D>
 where
-    T: Clone + fmt::Debug,
+    C: PortStatus + JoinablePortControl + Clone,
+    D: Clone,
 {
     fn num_inputs(&self) -> usize {
         1
@@ -221,92 +230,95 @@ where
         self.outputs.num_ports()
     }
 
-    fn accept_input_packet(
+    fn accept_output_ctrlgram(
+        &mut self,
+        _token: AccessToken,
+        output_index: PortIndex,
+        packet: Ctrlgram<C, D>,
+    ) {
+        self.outputs.accept_ctrlgram(output_index, packet)
+    }
+
+    fn accept_input_datagram(
         &mut self,
         _token: AccessToken,
         _input_index: PortIndex,
-        packet: Packet<T>,
+        packet: Datagram<C, D>,
     ) {
         debug_assert_eq!(PortIndex::new(0), _input_index);
-        self.input.accept_packet(packet);
+        self.input.accept_datagram(packet);
     }
 
-    fn accept_output_packet(
+    fn dispatch_input_ctrlgram(
+        &mut self,
+        _token: AccessToken,
+        _input_index: PortIndex,
+    ) -> Option<Ctrlgram<C, D>> {
+        debug_assert_eq!(PortIndex::new(0), _input_index);
+        self.input.dispatch_ctrlgram()
+    }
+
+    fn dispatch_output_datagram(
         &mut self,
         _token: AccessToken,
         output_index: PortIndex,
-        packet: Packet<T>,
-    ) {
-        self.outputs.accept_packet(output_index, packet)
-    }
-
-    fn dispatch_input_packet(&mut self, _token: AccessToken, _input_index: PortIndex) -> Packet<T> {
-        debug_assert_eq!(PortIndex::new(0), _input_index);
-        self.input.dispatch_packet()
-    }
-
-    fn dispatch_output_packet(
-        &mut self,
-        _token: AccessToken,
-        output_index: PortIndex,
-    ) -> Packet<T> {
-        self.outputs.dispatch_packet(output_index)
+    ) -> Option<Datagram<C, D>> {
+        self.outputs.dispatch_datagram(output_index)
     }
 }
 
-impl<T> NodeProcessor for OneToManySplitter<T>
+impl<C, D> NodeProcessor for OneToManySplitter<C, D>
 where
-    T: Clone + fmt::Debug,
+    C: PortStatus + JoinablePortControl + Clone,
+    D: Clone,
 {
     fn process_inputs(&mut self, _token: AccessToken) {
         debug_assert!(self.input.is_active());
-        let input_value = self.input.slot.take();
         for output_port in self.outputs.ports_mut() {
             if !output_port.is_active() {
                 continue;
             }
-            output_port.slot = input_value.clone();
+            output_port.data = self.input.data.as_ref().map(|data| data.clone());
         }
     }
 
     fn process_outputs(&mut self, _: AccessToken) {
-        self.input.activate(
-            self.outputs
-                .ports()
-                .any(|output_port| output_port.is_active()),
-        );
+        self.input.ctrl = self.outputs.ports().fold(None, |ctrl, port| {
+            if let Some(ctrl) = ctrl {
+                Some(ctrl.join_next_port_control(port.ctrl.as_ref()))
+            } else {
+                port.ctrl.as_ref().map(Clone::clone)
+            }
+        })
     }
 }
 
 #[derive(Debug, Default, Clone)]
-/// TODO
-pub struct DebugPrinterSink<T> {
-    /// TODO
-    pub inputs: VecPortBay<T>,
+
+pub struct DebugPrinterSink<C, D> {
+    pub inputs: VecPortBay<C, D>,
 }
 
-impl<T> DebugPrinterSink<T> {
-    /// TODO
+impl<C, D> DebugPrinterSink<C, D> {
     pub fn new(num_inputs: usize) -> Self {
         Self {
             inputs: VecPortBay::new(num_inputs),
         }
     }
 
-    /// TODO
-    pub fn input(&self, input_index: PortIndex) -> &Port<T> {
+    pub fn input(&self, input_index: PortIndex) -> &Port<C, D> {
         self.inputs.port(input_index)
     }
 
-    /// TODO
-    pub fn input_mut(&mut self, input_index: PortIndex) -> &mut Port<T> {
+    pub fn input_mut(&mut self, input_index: PortIndex) -> &mut Port<C, D> {
         self.inputs.port_mut(input_index)
     }
 }
 
-impl<T> Node<T> for DebugPrinterSink<T>
+impl<C, D> Node<C, D> for DebugPrinterSink<C, D>
 where
-    T: fmt::Debug,
+    C: PortStatus,
+    D: fmt::Debug,
 {
     fn num_inputs(&self) -> usize {
         self.inputs.num_ports()
@@ -316,40 +328,45 @@ where
         0
     }
 
-    fn accept_input_packet(
+    fn accept_input_datagram(
         &mut self,
         _token: AccessToken,
         input_index: PortIndex,
-        packet: Packet<T>,
+        packet: Datagram<C, D>,
     ) {
-        self.inputs.accept_packet(input_index, packet);
+        self.inputs.accept_datagram(input_index, packet);
     }
 
-    fn accept_output_packet(
+    fn accept_output_ctrlgram(
         &mut self,
         _token: AccessToken,
         _output_index: PortIndex,
-        _packet: Packet<T>,
+        _packet: Ctrlgram<C, D>,
     ) {
         unimplemented!();
     }
 
-    fn dispatch_input_packet(&mut self, _token: AccessToken, input_index: PortIndex) -> Packet<T> {
-        self.inputs.dispatch_packet(input_index)
+    fn dispatch_input_ctrlgram(
+        &mut self,
+        _token: AccessToken,
+        input_index: PortIndex,
+    ) -> Option<Ctrlgram<C, D>> {
+        self.inputs.dispatch_ctrlgram(input_index)
     }
 
-    fn dispatch_output_packet(
+    fn dispatch_output_datagram(
         &mut self,
         _token: AccessToken,
         _output_index: PortIndex,
-    ) -> Packet<T> {
+    ) -> Option<Datagram<C, D>> {
         unimplemented!();
     }
 }
 
-impl<T> NodeProcessor for DebugPrinterSink<T>
+impl<C, D> NodeProcessor for DebugPrinterSink<C, D>
 where
-    T: fmt::Debug,
+    C: PortStatus,
+    D: fmt::Debug,
 {
     fn process_inputs(&mut self, _: AccessToken) {
         // No outputs, just a side-effect
@@ -357,7 +374,7 @@ where
             "{:?}",
             self.inputs
                 .ports_mut()
-                .map(|port| port.slot.take())
+                .map(|port| port.data.as_ref())
                 .collect::<Vec<_>>()
         );
     }

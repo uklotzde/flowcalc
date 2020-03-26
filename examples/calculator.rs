@@ -1,11 +1,11 @@
-use flowcalc::{flow::*, node::*, port::*, Packet};
+use flowcalc::{flow::*, node::*, port::*};
 
 use std::{cell::RefCell, rc::Rc};
 
 #[derive(Default, Debug, Clone)]
 struct CalculatorNode {
-    inputs: [Port<f64>; 2],
-    outputs: [Port<f64>; 5],
+    inputs: [Port<bool, f64>; 2],
+    outputs: [Port<bool, f64>; 5],
     multiplier: f64,
 }
 
@@ -45,28 +45,28 @@ impl CalculatorNode {
         self.multiplier = multiplier;
     }
 
-    pub fn input(&self, input_index: PortIndex) -> &Port<f64> {
+    pub fn input(&self, input_index: PortIndex) -> &Port<bool, f64> {
         debug_assert!(input_index < PortIndex::new(self.num_inputs()));
         &self.inputs[usize::from(input_index)]
     }
 
-    pub fn input_mut(&mut self, input_index: PortIndex) -> &mut Port<f64> {
+    pub fn input_mut(&mut self, input_index: PortIndex) -> &mut Port<bool, f64> {
         debug_assert!(input_index < PortIndex::new(self.num_inputs()));
         &mut self.inputs[usize::from(input_index)]
     }
 
-    pub fn output(&self, output_index: PortIndex) -> &Port<f64> {
+    pub fn output(&self, output_index: PortIndex) -> &Port<bool, f64> {
         debug_assert!(output_index < PortIndex::new(self.num_outputs()));
         &self.outputs[usize::from(output_index)]
     }
 
-    pub fn output_mut(&mut self, output_index: PortIndex) -> &mut Port<f64> {
+    pub fn output_mut(&mut self, output_index: PortIndex) -> &mut Port<bool, f64> {
         debug_assert!(output_index < PortIndex::new(self.num_outputs()));
         &mut self.outputs[usize::from(output_index)]
     }
 }
 
-impl Node<f64> for CalculatorNode {
+impl Node<bool, f64> for CalculatorNode {
     fn num_inputs(&self) -> usize {
         2
     }
@@ -75,45 +75,45 @@ impl Node<f64> for CalculatorNode {
         5
     }
 
-    fn dispatch_input_packet(
+    fn accept_input_datagram(
         &mut self,
         _token: AccessToken,
         input_index: PortIndex,
-    ) -> Packet<f64> {
-        self.input_mut(input_index).dispatch_packet()
+        packet: Datagram<bool, f64>,
+    ) {
+        self.input_mut(input_index).accept_datagram(packet);
     }
 
-    fn dispatch_output_packet(
+    fn accept_output_ctrlgram(
         &mut self,
         _token: AccessToken,
         output_index: PortIndex,
-    ) -> Packet<f64> {
-        self.output_mut(output_index).dispatch_packet()
+        packet: Ctrlgram<bool, f64>,
+    ) {
+        self.output_mut(output_index).accept_ctrlgram(packet);
     }
 
-    fn accept_input_packet(
+    fn dispatch_input_ctrlgram(
         &mut self,
         _token: AccessToken,
         input_index: PortIndex,
-        packet: Packet<f64>,
-    ) {
-        self.input_mut(input_index).accept_packet(packet);
+    ) -> Option<Ctrlgram<bool, f64>> {
+        self.input_mut(input_index).dispatch_ctrlgram()
     }
 
-    fn accept_output_packet(
+    fn dispatch_output_datagram(
         &mut self,
         _token: AccessToken,
         output_index: PortIndex,
-        packet: Packet<f64>,
-    ) {
-        self.output_mut(output_index).accept_packet(packet);
+    ) -> Option<Datagram<bool, f64>> {
+        self.output_mut(output_index).dispatch_datagram()
     }
 }
 
 impl NodeProcessor for CalculatorNode {
     fn process_inputs(&mut self, _: AccessToken) {
-        let lhs_input_value = self.input_mut(Self::input_index_lhs()).slot.take();
-        let rhs_input_value = self.input_mut(Self::input_index_rhs()).slot.take();
+        let lhs_input_value = self.input_mut(Self::input_index_lhs()).data.take();
+        let rhs_input_value = self.input_mut(Self::input_index_rhs()).data.take();
         for (index, output) in self.outputs.iter_mut().enumerate() {
             if !output.is_active() {
                 continue;
@@ -162,7 +162,7 @@ impl NodeProcessor for CalculatorNode {
                 _ => panic!("invalid output index"),
             };
             let multiplier = self.multiplier;
-            output.slot = value.map(|value| multiplier * value);
+            output.data = value.map(|value| multiplier * value);
         }
     }
 
@@ -173,14 +173,14 @@ impl NodeProcessor for CalculatorNode {
             .iter()
             .enumerate()
             .any(|(i, output)| i != Self::output_index_rhs_neg().into() && output.is_active());
-        self.input_mut(Self::input_index_lhs()).activate(lhs_active);
+        self.input_mut(Self::input_index_lhs()).ctrl = Some(lhs_active);
         // Needed for all outputs except the negation of the lhs input
         let rhs_active = self
             .outputs
             .iter()
             .enumerate()
             .any(|(i, output)| i != Self::output_index_lhs_neg().into() && output.is_active());
-        self.input_mut(Self::input_index_rhs()).activate(rhs_active);
+        self.input_mut(Self::input_index_rhs()).ctrl = Some(rhs_active);
     }
 }
 
@@ -188,29 +188,29 @@ fn main() {
     use rand::Rng;
     let mut rng = rand::thread_rng();
     let chars: String = std::iter::repeat(())
-            .map(|()| rng.sample(rand::distributions::Alphanumeric))
-            .take(20)
-            .collect();
+        .map(|()| rng.sample(rand::distributions::Alphanumeric))
+        .take(20)
+        .collect();
     println!("Random chars: {}", chars);
 
     let calculator = Rc::new(RefCell::new(CalculatorNode::default()));
-    let splitter = Rc::new(RefCell::new(OneToManySplitter::<f64>::new(
+    let splitter = Rc::new(RefCell::new(OneToManySplitter::<bool, f64>::new(
         calculator.borrow().num_inputs(),
     )));
-    let printer = Rc::new(RefCell::new(DebugPrinterSink::<f64>::new(
+    let printer = Rc::new(RefCell::new(DebugPrinterSink::<bool, f64>::new(
         calculator.borrow().num_outputs(),
     )));
     // Print only selected outputs from the calculator
     printer
         .borrow_mut()
         .input_mut(CalculatorNode::output_index_sum())
-        .activate(true);
+        .ctrl = Some(true);
     printer
         .borrow_mut()
         .input_mut(CalculatorNode::output_index_prod())
-        .activate(true);
+        .ctrl = Some(true);
 
-    let mut flow: Flow<RcProxyNode<f64>, f64> = Flow::new();
+    let mut flow: Flow<RcProxyNode<bool, f64>, bool, f64> = Flow::new();
     let printer_id = flow.add_node(RcProxyNode::new(Rc::clone(&printer) as _));
     let splitter_id = flow.add_node(RcProxyNode::new(Rc::clone(&splitter) as _));
     let calculator_id = flow.add_node(RcProxyNode::new(Rc::clone(&calculator) as _));
@@ -259,7 +259,7 @@ fn main() {
             let mut splitter_node = splitter.borrow_mut();
             let single_input = splitter_node.input_mut();
             if single_input.is_active() {
-                single_input.slot = Some(f64::from(i));
+                single_input.data = Some(f64::from(i));
             }
             // release mutable borrow at runtime
         }
