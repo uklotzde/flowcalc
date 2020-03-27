@@ -35,13 +35,11 @@ impl RandomAsciiTextSource {
     }
 }
 
-impl Node<bool, Value> for RandomAsciiTextSource {
+impl Node<bool, Value> for RandomAsciiTextSource {}
+
+impl NodeInputs<bool, Value> for RandomAsciiTextSource {
     fn num_inputs(&self) -> usize {
         0
-    }
-
-    fn num_outputs(&self) -> usize {
-        1
     }
 
     fn accept_input_datagram(
@@ -53,6 +51,20 @@ impl Node<bool, Value> for RandomAsciiTextSource {
         unimplemented!();
     }
 
+    fn dispatch_input_ctrlgram(
+        &mut self,
+        _token: AccessToken,
+        _input_index: PortIndex,
+    ) -> Option<Ctrlgram<bool, Value>> {
+        unimplemented!();
+    }
+}
+
+impl NodeOutputs<bool, Value> for RandomAsciiTextSource {
+    fn num_outputs(&self) -> usize {
+        1
+    }
+
     fn accept_output_ctrlgram(
         &mut self,
         _token: AccessToken,
@@ -60,14 +72,6 @@ impl Node<bool, Value> for RandomAsciiTextSource {
         packet: Ctrlgram<bool, Value>,
     ) {
         self.output.accept_ctrlgram(packet);
-    }
-
-    fn dispatch_input_ctrlgram(
-        &mut self,
-        _token: AccessToken,
-        _input_index: PortIndex,
-    ) -> Option<Ctrlgram<bool, Value>> {
-        unimplemented!();
     }
 
     fn dispatch_output_datagram(
@@ -108,12 +112,10 @@ impl TextQrEncoder {
     }
 }
 
-impl Node<bool, Value> for TextQrEncoder {
-    fn num_inputs(&self) -> usize {
-        1
-    }
+impl Node<bool, Value> for TextQrEncoder {}
 
-    fn num_outputs(&self) -> usize {
+impl NodeInputs<bool, Value> for TextQrEncoder {
+    fn num_inputs(&self) -> usize {
         1
     }
 
@@ -126,6 +128,20 @@ impl Node<bool, Value> for TextQrEncoder {
         self.input.accept_datagram(packet);
     }
 
+    fn dispatch_input_ctrlgram(
+        &mut self,
+        _token: AccessToken,
+        _input_index: PortIndex,
+    ) -> Option<Ctrlgram<bool, Value>> {
+        self.input.dispatch_ctrlgram()
+    }
+}
+
+impl NodeOutputs<bool, Value> for TextQrEncoder {
+    fn num_outputs(&self) -> usize {
+        1
+    }
+
     fn accept_output_ctrlgram(
         &mut self,
         _token: AccessToken,
@@ -133,14 +149,6 @@ impl Node<bool, Value> for TextQrEncoder {
         packet: Ctrlgram<bool, Value>,
     ) {
         self.output.accept_ctrlgram(packet);
-    }
-
-    fn dispatch_input_ctrlgram(
-        &mut self,
-        _token: AccessToken,
-        _input_index: PortIndex,
-    ) -> Option<Ctrlgram<bool, Value>> {
-        self.input.dispatch_ctrlgram()
     }
 
     fn dispatch_output_datagram(
@@ -188,12 +196,10 @@ impl QrTextDecoder {
     }
 }
 
-impl Node<bool, Value> for QrTextDecoder {
-    fn num_inputs(&self) -> usize {
-        1
-    }
+impl Node<bool, Value> for QrTextDecoder {}
 
-    fn num_outputs(&self) -> usize {
+impl NodeInputs<bool, Value> for QrTextDecoder {
+    fn num_inputs(&self) -> usize {
         1
     }
 
@@ -206,6 +212,20 @@ impl Node<bool, Value> for QrTextDecoder {
         self.input.accept_datagram(packet);
     }
 
+    fn dispatch_input_ctrlgram(
+        &mut self,
+        _token: AccessToken,
+        _input_index: PortIndex,
+    ) -> Option<Ctrlgram<bool, Value>> {
+        self.input.dispatch_ctrlgram()
+    }
+}
+
+impl NodeOutputs<bool, Value> for QrTextDecoder {
+    fn num_outputs(&self) -> usize {
+        1
+    }
+
     fn accept_output_ctrlgram(
         &mut self,
         _token: AccessToken,
@@ -213,14 +233,6 @@ impl Node<bool, Value> for QrTextDecoder {
         packet: Ctrlgram<bool, Value>,
     ) {
         self.output.accept_ctrlgram(packet);
-    }
-
-    fn dispatch_input_ctrlgram(
-        &mut self,
-        _token: AccessToken,
-        _input_index: PortIndex,
-    ) -> Option<Ctrlgram<bool, Value>> {
-        self.input.dispatch_ctrlgram()
     }
 
     fn dispatch_output_datagram(

@@ -66,13 +66,11 @@ impl CalculatorNode {
     }
 }
 
-impl Node<(), f64> for CalculatorNode {
+impl Node<(), f64> for CalculatorNode {}
+
+impl NodeInputs<(), f64> for CalculatorNode {
     fn num_inputs(&self) -> usize {
         2
-    }
-
-    fn num_outputs(&self) -> usize {
-        5
     }
 
     fn accept_input_datagram(
@@ -84,6 +82,20 @@ impl Node<(), f64> for CalculatorNode {
         self.input_mut(input_index).accept_datagram(packet);
     }
 
+    fn dispatch_input_ctrlgram(
+        &mut self,
+        _token: AccessToken,
+        input_index: PortIndex,
+    ) -> Option<Ctrlgram<(), f64>> {
+        self.input_mut(input_index).dispatch_ctrlgram()
+    }
+}
+
+impl NodeOutputs<(), f64> for CalculatorNode {
+    fn num_outputs(&self) -> usize {
+        5
+    }
+
     fn accept_output_ctrlgram(
         &mut self,
         _token: AccessToken,
@@ -91,14 +103,6 @@ impl Node<(), f64> for CalculatorNode {
         packet: Ctrlgram<(), f64>,
     ) {
         self.output_mut(output_index).accept_ctrlgram(packet);
-    }
-
-    fn dispatch_input_ctrlgram(
-        &mut self,
-        _token: AccessToken,
-        input_index: PortIndex,
-    ) -> Option<Ctrlgram<(), f64>> {
-        self.input_mut(input_index).dispatch_ctrlgram()
     }
 
     fn dispatch_output_datagram(

@@ -5,27 +5,6 @@ use super::{
 
 use std::{cell::RefCell, fmt, rc::Rc};
 
-pub trait Processor {
-    /// Process the current contents from all ports
-    fn process(&mut self, token: AccessToken);
-}
-
-pub trait SemiNode<C, D>: Processor + PortBay<C, D> {}
-
-pub trait FullNode<C, D> {
-    type Input: SemiNode<C, D>;
-
-    type Output: SemiNode<C, D>;
-
-    fn input(&self) -> &Self::Input;
-
-    fn input_mut(&self) -> &mut Self::Input;
-
-    fn output(&self) -> &Self::Input;
-
-    fn output_mut(&self) -> &mut Self::Input;
-}
-
 pub trait NodeProcessor {
     /// Backward pass: Refresh the state of all inputs
     ///
@@ -56,12 +35,9 @@ pub trait NodeProcessor {
     fn process_inputs(&mut self, token: AccessToken);
 }
 
-pub trait Node<C, D>: NodeProcessor {
+pub trait NodeInputs<C, D> {
     /// Query the number of input ports
     fn num_inputs(&self) -> usize;
-
-    /// Query the number of output ports
-    fn num_outputs(&self) -> usize;
 
     fn accept_input_datagram(
         &mut self,
@@ -70,6 +46,17 @@ pub trait Node<C, D>: NodeProcessor {
         packet: Datagram<C, D>,
     );
 
+    fn dispatch_input_ctrlgram(
+        &mut self,
+        token: AccessToken,
+        input_index: PortIndex,
+    ) -> Option<Ctrlgram<C, D>>;
+}
+
+pub trait NodeOutputs<C, D> {
+    /// Query the number of output ports
+    fn num_outputs(&self) -> usize;
+
     fn accept_output_ctrlgram(
         &mut self,
         token: AccessToken,
@@ -77,18 +64,14 @@ pub trait Node<C, D>: NodeProcessor {
         packet: Ctrlgram<C, D>,
     );
 
-    fn dispatch_input_ctrlgram(
-        &mut self,
-        token: AccessToken,
-        input_index: PortIndex,
-    ) -> Option<Ctrlgram<C, D>>;
-
     fn dispatch_output_datagram(
         &mut self,
         token: AccessToken,
         output_index: PortIndex,
     ) -> Option<Datagram<C, D>>;
 }
+
+pub trait Node<C, D>: NodeInputs<C, D> + NodeOutputs<C, D> + NodeProcessor {}
 
 /// A reference-counted node proxy
 #[derive(Clone)]
@@ -104,13 +87,11 @@ impl<C, D> RcProxyNode<C, D> {
     }
 }
 
-impl<C, D> Node<C, D> for RcProxyNode<C, D> {
+impl<C, D> Node<C, D> for RcProxyNode<C, D> {}
+
+impl<C, D> NodeInputs<C, D> for RcProxyNode<C, D> {
     fn num_inputs(&self) -> usize {
         self.node.borrow().num_inputs()
-    }
-
-    fn num_outputs(&self) -> usize {
-        self.node.borrow().num_outputs()
     }
 
     fn accept_input_datagram(
@@ -124,6 +105,22 @@ impl<C, D> Node<C, D> for RcProxyNode<C, D> {
             .accept_input_datagram(token, input_index, packet)
     }
 
+    fn dispatch_input_ctrlgram(
+        &mut self,
+        token: AccessToken,
+        input_index: PortIndex,
+    ) -> Option<Ctrlgram<C, D>> {
+        self.node
+            .borrow_mut()
+            .dispatch_input_ctrlgram(token, input_index)
+    }
+}
+
+impl<C, D> NodeOutputs<C, D> for RcProxyNode<C, D> {
+    fn num_outputs(&self) -> usize {
+        self.node.borrow().num_outputs()
+    }
+
     fn accept_output_ctrlgram(
         &mut self,
         token: AccessToken,
@@ -133,16 +130,6 @@ impl<C, D> Node<C, D> for RcProxyNode<C, D> {
         self.node
             .borrow_mut()
             .accept_output_ctrlgram(token, output_index, packet)
-    }
-
-    fn dispatch_input_ctrlgram(
-        &mut self,
-        token: AccessToken,
-        input_index: PortIndex,
-    ) -> Option<Ctrlgram<C, D>> {
-        self.node
-            .borrow_mut()
-            .dispatch_input_ctrlgram(token, input_index)
     }
 
     fn dispatch_output_datagram(
@@ -222,21 +209,15 @@ where
     C: Clone + JoinablePortControl,
     D: Clone,
 {
+}
+
+impl<C, D> NodeInputs<C, D> for OneToManySplitter<C, D>
+where
+    C: Clone + JoinablePortControl,
+    D: Clone,
+{
     fn num_inputs(&self) -> usize {
         1
-    }
-
-    fn num_outputs(&self) -> usize {
-        self.outputs.num_ports()
-    }
-
-    fn accept_output_ctrlgram(
-        &mut self,
-        _token: AccessToken,
-        output_index: PortIndex,
-        packet: Ctrlgram<C, D>,
-    ) {
-        self.outputs.accept_ctrlgram(output_index, packet)
     }
 
     fn accept_input_datagram(
@@ -256,6 +237,25 @@ where
     ) -> Option<Ctrlgram<C, D>> {
         debug_assert_eq!(PortIndex::new(0), _input_index);
         self.input.dispatch_ctrlgram()
+    }
+}
+
+impl<C, D> NodeOutputs<C, D> for OneToManySplitter<C, D>
+where
+    C: Clone + JoinablePortControl,
+    D: Clone,
+{
+    fn num_outputs(&self) -> usize {
+        self.outputs.num_ports()
+    }
+
+    fn accept_output_ctrlgram(
+        &mut self,
+        _token: AccessToken,
+        output_index: PortIndex,
+        packet: Ctrlgram<C, D>,
+    ) {
+        self.outputs.accept_ctrlgram(output_index, packet)
     }
 
     fn dispatch_output_datagram(
@@ -314,16 +314,14 @@ impl<C, D> DebugPrinterSink<C, D> {
     }
 }
 
-impl<C, D> Node<C, D> for DebugPrinterSink<C, D>
+impl<C, D> Node<C, D> for DebugPrinterSink<C, D> where D: fmt::Debug {}
+
+impl<C, D> NodeInputs<C, D> for DebugPrinterSink<C, D>
 where
     D: fmt::Debug,
 {
     fn num_inputs(&self) -> usize {
         self.inputs.num_ports()
-    }
-
-    fn num_outputs(&self) -> usize {
-        0
     }
 
     fn accept_input_datagram(
@@ -335,6 +333,20 @@ where
         self.inputs.accept_datagram(input_index, packet);
     }
 
+    fn dispatch_input_ctrlgram(
+        &mut self,
+        _token: AccessToken,
+        input_index: PortIndex,
+    ) -> Option<Ctrlgram<C, D>> {
+        self.inputs.dispatch_ctrlgram(input_index)
+    }
+}
+
+impl<C, D> NodeOutputs<C, D> for DebugPrinterSink<C, D> {
+    fn num_outputs(&self) -> usize {
+        0
+    }
+
     fn accept_output_ctrlgram(
         &mut self,
         _token: AccessToken,
@@ -342,14 +354,6 @@ where
         _packet: Ctrlgram<C, D>,
     ) {
         unimplemented!();
-    }
-
-    fn dispatch_input_ctrlgram(
-        &mut self,
-        _token: AccessToken,
-        input_index: PortIndex,
-    ) -> Option<Ctrlgram<C, D>> {
-        self.inputs.dispatch_ctrlgram(input_index)
     }
 
     fn dispatch_output_datagram(
