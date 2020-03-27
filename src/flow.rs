@@ -279,7 +279,7 @@ where
         unsafe {
             let node = &mut (*flow_node_ptr).node;
             for (input_index, incoming) in &(*flow_node_ptr).connected_inputs {
-                let packet = node.dispatch_input_ctrlgram(AccessToken::new(), *input_index);
+                let packet = node.try_dispatch_input_packet(AccessToken::new(), *input_index);
                 if let Some(packet) = packet {
                     let Socket {
                         node_id: predecessor_node_id,
@@ -287,7 +287,7 @@ where
                     } = *incoming;
                     debug_assert_ne!(node_id, predecessor_node_id); // disjunct nodes!
                     let predecessor_node = &mut self.flow_node_mut(predecessor_node_id).node;
-                    predecessor_node.accept_output_ctrlgram(
+                    predecessor_node.accept_output_packet(
                         AccessToken::new(),
                         predecessor_port_index,
                         packet,
@@ -315,7 +315,7 @@ where
         unsafe {
             let node = &mut (*flow_node_ptr).node;
             for (output_index, outgoing) in &(*flow_node_ptr).connected_outputs {
-                let packet = node.dispatch_output_datagram(AccessToken::new(), *output_index);
+                let packet = node.try_dispatch_output_packet(AccessToken::new(), *output_index);
                 if let Some(packet) = packet {
                     let Socket {
                         node_id: successor_node_id,
@@ -323,7 +323,7 @@ where
                     } = *outgoing;
                     debug_assert_ne!(node_id, successor_node_id); // disjunct nodes!
                     let successor_node = &mut self.flow_node_mut(successor_node_id).node;
-                    successor_node.accept_input_datagram(
+                    successor_node.accept_input_packet(
                         AccessToken::new(),
                         successor_port_index,
                         packet,

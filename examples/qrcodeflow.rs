@@ -42,20 +42,20 @@ impl NodeInputs<(), Value> for RandomAsciiTextSource {
         0
     }
 
-    fn accept_input_datagram(
+    fn accept_input_packet(
         &mut self,
         _token: AccessToken,
         _input_index: PortIndex,
-        _packet: Datagram<(), Value>,
+        _packet: Packet<Value, ()>,
     ) {
         unimplemented!();
     }
 
-    fn dispatch_input_ctrlgram(
+    fn try_dispatch_input_packet(
         &mut self,
         _token: AccessToken,
         _input_index: PortIndex,
-    ) -> Option<Ctrlgram<(), Value>> {
+    ) -> Option<Packet<(), Value>> {
         unimplemented!();
     }
 }
@@ -65,31 +65,31 @@ impl NodeOutputs<(), Value> for RandomAsciiTextSource {
         1
     }
 
-    fn accept_output_ctrlgram(
+    fn accept_output_packet(
         &mut self,
         _token: AccessToken,
         _output_index: PortIndex,
-        packet: Ctrlgram<(), Value>,
+        packet: Packet<(), Value>,
     ) {
-        self.output.accept_ctrlgram(packet);
+        self.output.accept_packet(packet);
     }
 
-    fn dispatch_output_datagram(
+    fn try_dispatch_output_packet(
         &mut self,
         _token: AccessToken,
         _output_index: PortIndex,
-    ) -> Option<Datagram<(), Value>> {
-        self.output.dispatch_datagram()
+    ) -> Option<Packet<Value, ()>> {
+        self.output.try_dispatch_packet()
     }
 }
 
 impl NodeProcessor for RandomAsciiTextSource {
     fn process_inputs(&mut self, _: AccessToken) {
-        if self.output.ctrl.is_none() {
+        if self.output.incoming.is_none() {
             return;
         }
         let text = self.gen_text();
-        self.output.data = Some(Value::Text(text));
+        self.output.outgoing = Some(Value::Text(text));
     }
 
     fn process_outputs(&mut self, _: AccessToken) {
@@ -99,7 +99,7 @@ impl NodeProcessor for RandomAsciiTextSource {
 
 #[derive(Debug)]
 struct TextQrEncoder {
-    input: Port<(), Value>,
+    input: Port<Value, ()>,
     output: Port<(), Value>,
 }
 
@@ -119,21 +119,21 @@ impl NodeInputs<(), Value> for TextQrEncoder {
         1
     }
 
-    fn accept_input_datagram(
+    fn accept_input_packet(
         &mut self,
         _token: AccessToken,
         _input_index: PortIndex,
-        packet: Datagram<(), Value>,
+        packet: Packet<Value, ()>,
     ) {
-        self.input.accept_datagram(packet);
+        self.input.accept_packet(packet);
     }
 
-    fn dispatch_input_ctrlgram(
+    fn try_dispatch_input_packet(
         &mut self,
         _token: AccessToken,
         _input_index: PortIndex,
-    ) -> Option<Ctrlgram<(), Value>> {
-        self.input.dispatch_ctrlgram()
+    ) -> Option<Packet<(), Value>> {
+        self.input.try_dispatch_packet()
     }
 }
 
@@ -142,46 +142,46 @@ impl NodeOutputs<(), Value> for TextQrEncoder {
         1
     }
 
-    fn accept_output_ctrlgram(
+    fn accept_output_packet(
         &mut self,
         _token: AccessToken,
         _output_index: PortIndex,
-        packet: Ctrlgram<(), Value>,
+        packet: Packet<(), Value>,
     ) {
-        self.output.accept_ctrlgram(packet);
+        self.output.accept_packet(packet);
     }
 
-    fn dispatch_output_datagram(
+    fn try_dispatch_output_packet(
         &mut self,
         _token: AccessToken,
         _output_index: PortIndex,
-    ) -> Option<Datagram<(), Value>> {
-        self.output.dispatch_datagram()
+    ) -> Option<Packet<Value, ()>> {
+        self.output.try_dispatch_packet()
     }
 }
 
 impl NodeProcessor for TextQrEncoder {
     fn process_inputs(&mut self, _: AccessToken) {
-        if self.output.ctrl.is_none() {
+        if self.output.incoming.is_none() {
             return;
         }
-        let input_value = self.input.data.take();
+        let input_value = self.input.incoming.take();
         if let Some(Value::Text(text)) = input_value {
             let code = qrcode::QrCode::new(text.as_bytes()).expect("QR code");
             let image = code.render::<image::Luma<_>>().build();
-            self.output.data = Some(Value::GrayImage(image));
+            self.output.outgoing = Some(Value::GrayImage(image));
         } else {
             panic!("Missing input string");
         }
     }
 
     fn process_outputs(&mut self, _: AccessToken) {
-        self.input.ctrl = self.output.ctrl;
+        self.input.outgoing = self.output.incoming;
     }
 }
 
 struct QrTextDecoder {
-    input: Port<(), Value>,
+    input: Port<Value, ()>,
     output: Port<(), Value>,
     decoder: bardecoder::Decoder<image::DynamicImage, image::GrayImage>,
 }
@@ -203,21 +203,21 @@ impl NodeInputs<(), Value> for QrTextDecoder {
         1
     }
 
-    fn accept_input_datagram(
+    fn accept_input_packet(
         &mut self,
         _token: AccessToken,
         _input_index: PortIndex,
-        packet: Datagram<(), Value>,
+        packet: Packet<Value, ()>,
     ) {
-        self.input.accept_datagram(packet);
+        self.input.accept_packet(packet);
     }
 
-    fn dispatch_input_ctrlgram(
+    fn try_dispatch_input_packet(
         &mut self,
         _token: AccessToken,
         _input_index: PortIndex,
-    ) -> Option<Ctrlgram<(), Value>> {
-        self.input.dispatch_ctrlgram()
+    ) -> Option<Packet<(), Value>> {
+        self.input.try_dispatch_packet()
     }
 }
 
@@ -226,40 +226,41 @@ impl NodeOutputs<(), Value> for QrTextDecoder {
         1
     }
 
-    fn accept_output_ctrlgram(
+    fn accept_output_packet(
         &mut self,
         _token: AccessToken,
         _output_index: PortIndex,
-        packet: Ctrlgram<(), Value>,
+        packet: Packet<(), Value>,
     ) {
-        self.output.accept_ctrlgram(packet);
+        self.output.accept_packet(packet);
     }
 
-    fn dispatch_output_datagram(
+    fn try_dispatch_output_packet(
         &mut self,
         _token: AccessToken,
         _output_index: PortIndex,
-    ) -> Option<Datagram<(), Value>> {
-        self.output.dispatch_datagram()
+    ) -> Option<Packet<Value, ()>> {
+        self.output.try_dispatch_packet()
     }
 }
 
 impl NodeProcessor for QrTextDecoder {
     fn process_inputs(&mut self, _: AccessToken) {
-        if self.output.ctrl.is_none() {
+        if self.output.incoming.is_none() {
+            // Not output requested
             return;
         }
-        let input_value = self.input.data.take();
+        let input_value = self.input.incoming.take();
         if let Some(Value::GrayImage(image)) = input_value {
             let results = self.decoder.decode(&image::DynamicImage::ImageLuma8(image));
             debug_assert!(results.len() <= 1);
             let first_result = results.into_iter().next();
             if let Some(first_result) = first_result {
                 let text = first_result.expect("decoded text");
-                self.output.data = Some(Value::Text(text));
+                self.output.outgoing = Some(Value::Text(text));
             } else {
                 eprintln!("No QR codes found in image");
-                self.output.data = None;
+                self.output.outgoing = None;
             }
         } else {
             panic!("Missing image");
@@ -267,7 +268,7 @@ impl NodeProcessor for QrTextDecoder {
     }
 
     fn process_outputs(&mut self, _: AccessToken) {
-        self.input.ctrl = self.output.ctrl;
+        self.input.outgoing = self.output.incoming;
     }
 }
 
@@ -337,7 +338,7 @@ fn main() {
 
     // Activate all sink inputs
     for port in printer.borrow_mut().inputs.ports_mut() {
-        port.ctrl = Some(());
+        port.outgoing = Some(());
     }
 
     let topo_nodes = flow.topological_nodes().unwrap();

@@ -1,86 +1,72 @@
+#[derive(Debug, Clone, Copy)]
+pub struct Packet<P, B> {
+    /// The payload
+    ///
+    /// Within a flow graph the payload in forward direction
+    /// (2nd phase) contains the actual data message while in
+    /// backward direction (1st phase) the payload contains
+    /// a control message.
+    pub payload: P,
+
+    /// Optional pre-allocated data to be reused when passing
+    /// back a complementary packet into the opposite direction
+    ///
+    /// Within a flow graph the piggyback in backward direction
+    /// (1st phase) contains a pre-allocated data message to be
+    /// used for the return path while in forward direction
+    /// (2nd phasee) the payload contains the previously received
+    /// control message.
+    pub piggyback: Option<B>,
+}
+
 /// An input or output port of a processing node.
 ///
 /// Ports have two generic parameters for packet data:
-///   - `C`: Control data
-///   - `D`: Payload data
+///   - `I`: Incoming data
+///   - `O`: Outgoing data
 ///
-/// Request control data `C` is passed backward in the flow
-/// graph from input to connected output ports.
+/// Input ports accept packets with an incoming data payload
+/// in forward direction and dispatch packets with on outgoing
+/// control payload in backward direction.
 ///
-/// Payload response data `D` is passed forward in the flow
-/// graph from output to connected input ports.
+/// Output ports accept packets with an incoming control payload
+/// in backward direction and dispatch packets with an outgoing
+/// data payload in forward direction.
 #[derive(Default, Debug, Clone, Copy)]
-pub struct Port<C, D> {
-    /// A slot (= a buffer with capacity 1) for a control message
-    pub ctrl: Option<C>,
+pub struct Port<I, O> {
+    /// A slot (= a buffer with capacity 1) for the payload of an
+    /// incoming package
+    pub incoming: Option<I>,
 
-    /// A slot (= a buffer with capacity 1) for a data message
-    pub data: Option<D>,
+    /// A slot (= a buffer with capacity 1) for the playload of an
+    /// outgoing packet
+    pub outgoing: Option<O>,
 }
 
-impl<C, D> Port<C, D> {
-    /// Create an empty port
+impl<I, O> Port<I, O> {
     pub const fn new() -> Self {
         Self {
-            ctrl: None,
-            data: None,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct Ctrlgram<C, D> {
-    /// A control message
-    pub ctrl: C,
-
-    /// Optional data buffer to be recycled
-    pub data: Option<D>,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct Datagram<C, D> {
-    /// A data message
-    pub data: D,
-
-    /// Optional control buffer to be recycled
-    pub ctrl: Option<C>,
-}
-
-impl<C, D> Port<C, D> {
-    /// Accept a ctrl packet from a connected input port
-    pub fn accept_ctrlgram(&mut self, packet: Ctrlgram<C, D>) {
-        debug_assert!(self.ctrl.is_none());
-        debug_assert!(self.data.is_none());
-        self.ctrl = Some(packet.ctrl);
-        self.data = packet.data;
-    }
-
-    /// Accept a data packet from a connected output port
-    pub fn accept_datagram(&mut self, packet: Datagram<C, D>) {
-        debug_assert!(self.ctrl.is_none());
-        debug_assert!(self.data.is_none());
-        self.ctrl = packet.ctrl;
-        self.data = Some(packet.data);
-    }
-
-    /// Dispatch a ctrl packet for a connected input port
-    pub fn dispatch_ctrlgram(&mut self) -> Option<Ctrlgram<C, D>> {
-        if let Some(ctrl) = self.ctrl.take() {
-            Some(Ctrlgram {
-                ctrl,
-                data: self.data.take(),
-            })
-        } else {
-            None
+            incoming: None,
+            outgoing: None,
         }
     }
 
-    /// Dispatch a data packet for a connected output port
-    pub fn dispatch_datagram(&mut self) -> Option<Datagram<C, D>> {
-        if let Some(data) = self.data.take() {
-            Some(Datagram {
-                ctrl: self.ctrl.take(),
-                data,
+    /// Accept a packet with an incoming payload
+    pub fn accept_packet(&mut self, packet: Packet<I, O>) {
+        let Packet {
+            payload: incoming,
+            piggyback: outgoing,
+        } = packet;
+        self.incoming = Some(incoming);
+        self.outgoing = outgoing;
+    }
+
+    /// Try to dispatch a packet with an outgoing payload
+    pub fn try_dispatch_packet(&mut self) -> Option<Packet<O, I>> {
+        if let Some(outgoing) = self.outgoing.take() {
+            Some(Packet {
+                payload: outgoing,
+                piggyback: self.incoming.take(),
             })
         } else {
             None
@@ -104,31 +90,25 @@ impl From<PortIndex> for usize {
 }
 
 /// An indexed collection of ports
-pub trait PortBay<C, D> {
+pub trait PortBay<I, O> {
     /// The number of ports in this bay
     ///
     /// Port indexes are 0-based in the range 0..num_ports().
     fn num_ports(&self) -> usize;
 
-    /// Fetch and dispatch a ctrl packet from the given port
-    fn dispatch_ctrlgram(&mut self, port_index: PortIndex) -> Option<Ctrlgram<C, D>>;
+    /// Receive and store an incoming packet for the given port
+    fn accept_packet(&mut self, port_index: PortIndex, packet: Packet<I, O>);
 
-    /// Fetch and dispatch a data packet from the given port
-    fn dispatch_datagram(&mut self, port_index: PortIndex) -> Option<Datagram<C, D>>;
-
-    /// Receive an incoming ctrl packet for the given port
-    fn accept_ctrlgram(&mut self, port_index: PortIndex, packet: Ctrlgram<C, D>);
-
-    /// Receive an incoming data packet for the given port
-    fn accept_datagram(&mut self, port_index: PortIndex, packet: Datagram<C, D>);
+    /// Fetch and dispatch an outgoing packet from the given port
+    fn try_dispatch_packet(&mut self, port_index: PortIndex) -> Option<Packet<O, I>>;
 }
 
 #[derive(Default, Debug, Clone)]
-pub struct VecPortBay<C, D> {
-    ports: Vec<Port<C, D>>,
+pub struct VecPortBay<I, O> {
+    ports: Vec<Port<I, O>>,
 }
 
-impl<C, D> VecPortBay<C, D> {
+impl<I, O> VecPortBay<I, O> {
     pub fn new(num_ports: usize) -> Self {
         let mut ports = Vec::with_capacity(num_ports);
         for _ in 0..num_ports {
@@ -137,45 +117,37 @@ impl<C, D> VecPortBay<C, D> {
         Self { ports }
     }
 
-    pub fn ports(&self) -> impl Iterator<Item = &Port<C, D>> {
+    pub fn ports(&self) -> impl Iterator<Item = &Port<I, O>> {
         self.ports.iter()
     }
 
-    pub fn ports_mut(&mut self) -> impl Iterator<Item = &mut Port<C, D>> {
+    pub fn ports_mut(&mut self) -> impl Iterator<Item = &mut Port<I, O>> {
         self.ports.iter_mut()
     }
 
-    pub fn port(&self, port_index: PortIndex) -> &Port<C, D> {
+    pub fn port(&self, port_index: PortIndex) -> &Port<I, O> {
         let index = usize::from(port_index);
         debug_assert!(index < self.ports.len());
         &self.ports[index]
     }
 
-    pub fn port_mut(&mut self, port_index: PortIndex) -> &mut Port<C, D> {
+    pub fn port_mut(&mut self, port_index: PortIndex) -> &mut Port<I, O> {
         let index = usize::from(port_index);
         debug_assert!(index < self.ports.len());
         &mut self.ports[index]
     }
 }
 
-impl<C, D> PortBay<C, D> for VecPortBay<C, D> {
+impl<I, O> PortBay<I, O> for VecPortBay<I, O> {
     fn num_ports(&self) -> usize {
         self.ports.len()
     }
 
-    fn dispatch_ctrlgram(&mut self, port_index: PortIndex) -> Option<Ctrlgram<C, D>> {
-        self.port_mut(port_index).dispatch_ctrlgram()
+    fn accept_packet(&mut self, port_index: PortIndex, packet: Packet<I, O>) {
+        self.port_mut(port_index).accept_packet(packet);
     }
 
-    fn dispatch_datagram(&mut self, port_index: PortIndex) -> Option<Datagram<C, D>> {
-        self.port_mut(port_index).dispatch_datagram()
-    }
-
-    fn accept_ctrlgram(&mut self, port_index: PortIndex, packet: Ctrlgram<C, D>) {
-        self.port_mut(port_index).accept_ctrlgram(packet);
-    }
-
-    fn accept_datagram(&mut self, port_index: PortIndex, packet: Datagram<C, D>) {
-        self.port_mut(port_index).accept_datagram(packet);
+    fn try_dispatch_packet(&mut self, port_index: PortIndex) -> Option<Packet<O, I>> {
+        self.port_mut(port_index).try_dispatch_packet()
     }
 }

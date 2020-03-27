@@ -1,6 +1,6 @@
 use super::{
     flow::AccessToken,
-    port::{Ctrlgram, Datagram, Port, PortBay, PortIndex, VecPortBay},
+    port::{Packet, Port, PortBay, PortIndex, VecPortBay},
 };
 
 use std::{cell::RefCell, fmt, rc::Rc};
@@ -39,36 +39,36 @@ pub trait NodeInputs<C, D> {
     /// Query the number of input ports
     fn num_inputs(&self) -> usize;
 
-    fn accept_input_datagram(
+    fn accept_input_packet(
         &mut self,
         token: AccessToken,
         input_index: PortIndex,
-        packet: Datagram<C, D>,
+        packet: Packet<D, C>,
     );
 
-    fn dispatch_input_ctrlgram(
+    fn try_dispatch_input_packet(
         &mut self,
         token: AccessToken,
         input_index: PortIndex,
-    ) -> Option<Ctrlgram<C, D>>;
+    ) -> Option<Packet<C, D>>;
 }
 
 pub trait NodeOutputs<C, D> {
     /// Query the number of output ports
     fn num_outputs(&self) -> usize;
 
-    fn accept_output_ctrlgram(
+    fn accept_output_packet(
         &mut self,
         token: AccessToken,
         output_index: PortIndex,
-        packet: Ctrlgram<C, D>,
+        packet: Packet<C, D>,
     );
 
-    fn dispatch_output_datagram(
+    fn try_dispatch_output_packet(
         &mut self,
         token: AccessToken,
         output_index: PortIndex,
-    ) -> Option<Datagram<C, D>>;
+    ) -> Option<Packet<D, C>>;
 }
 
 pub trait Node<C, D>: NodeInputs<C, D> + NodeOutputs<C, D> + NodeProcessor {}
@@ -94,25 +94,25 @@ impl<C, D> NodeInputs<C, D> for RcProxyNode<C, D> {
         self.node.borrow().num_inputs()
     }
 
-    fn accept_input_datagram(
+    fn accept_input_packet(
         &mut self,
         token: AccessToken,
         input_index: PortIndex,
-        packet: Datagram<C, D>,
+        packet: Packet<D, C>,
     ) {
         self.node
             .borrow_mut()
-            .accept_input_datagram(token, input_index, packet)
+            .accept_input_packet(token, input_index, packet)
     }
 
-    fn dispatch_input_ctrlgram(
+    fn try_dispatch_input_packet(
         &mut self,
         token: AccessToken,
         input_index: PortIndex,
-    ) -> Option<Ctrlgram<C, D>> {
+    ) -> Option<Packet<C, D>> {
         self.node
             .borrow_mut()
-            .dispatch_input_ctrlgram(token, input_index)
+            .try_dispatch_input_packet(token, input_index)
     }
 }
 
@@ -121,25 +121,25 @@ impl<C, D> NodeOutputs<C, D> for RcProxyNode<C, D> {
         self.node.borrow().num_outputs()
     }
 
-    fn accept_output_ctrlgram(
+    fn accept_output_packet(
         &mut self,
         token: AccessToken,
         output_index: PortIndex,
-        packet: Ctrlgram<C, D>,
+        packet: Packet<C, D>,
     ) {
         self.node
             .borrow_mut()
-            .accept_output_ctrlgram(token, output_index, packet)
+            .accept_output_packet(token, output_index, packet)
     }
 
-    fn dispatch_output_datagram(
+    fn try_dispatch_output_packet(
         &mut self,
         token: AccessToken,
         output_index: PortIndex,
-    ) -> Option<Datagram<C, D>> {
+    ) -> Option<Packet<D, C>> {
         self.node
             .borrow_mut()
-            .dispatch_output_datagram(token, output_index)
+            .try_dispatch_output_packet(token, output_index)
     }
 }
 
@@ -175,7 +175,7 @@ impl JoinablePortControl for bool {
 
 #[derive(Default, Debug, Clone)]
 pub struct OneToManySplitter<C, D> {
-    input: Port<C, D>,
+    input: Port<D, C>,
     outputs: VecPortBay<C, D>,
 }
 
@@ -187,11 +187,11 @@ impl<C, D> OneToManySplitter<C, D> {
         }
     }
 
-    pub fn input(&self) -> &Port<C, D> {
+    pub fn input(&self) -> &Port<D, C> {
         &self.input
     }
 
-    pub fn input_mut(&mut self) -> &mut Port<C, D> {
+    pub fn input_mut(&mut self) -> &mut Port<D, C> {
         &mut self.input
     }
 
@@ -220,23 +220,23 @@ where
         1
     }
 
-    fn accept_input_datagram(
+    fn accept_input_packet(
         &mut self,
         _token: AccessToken,
         _input_index: PortIndex,
-        packet: Datagram<C, D>,
+        packet: Packet<D, C>,
     ) {
         debug_assert_eq!(PortIndex::new(0), _input_index);
-        self.input.accept_datagram(packet);
+        self.input.accept_packet(packet);
     }
 
-    fn dispatch_input_ctrlgram(
+    fn try_dispatch_input_packet(
         &mut self,
         _token: AccessToken,
         _input_index: PortIndex,
-    ) -> Option<Ctrlgram<C, D>> {
+    ) -> Option<Packet<C, D>> {
         debug_assert_eq!(PortIndex::new(0), _input_index);
-        self.input.dispatch_ctrlgram()
+        self.input.try_dispatch_packet()
     }
 }
 
@@ -249,21 +249,21 @@ where
         self.outputs.num_ports()
     }
 
-    fn accept_output_ctrlgram(
+    fn accept_output_packet(
         &mut self,
         _token: AccessToken,
         output_index: PortIndex,
-        packet: Ctrlgram<C, D>,
+        packet: Packet<C, D>,
     ) {
-        self.outputs.accept_ctrlgram(output_index, packet)
+        self.outputs.accept_packet(output_index, packet)
     }
 
-    fn dispatch_output_datagram(
+    fn try_dispatch_output_packet(
         &mut self,
         _token: AccessToken,
         output_index: PortIndex,
-    ) -> Option<Datagram<C, D>> {
-        self.outputs.dispatch_datagram(output_index)
+    ) -> Option<Packet<D, C>> {
+        self.outputs.try_dispatch_packet(output_index)
     }
 }
 
@@ -274,19 +274,23 @@ where
 {
     fn process_inputs(&mut self, _token: AccessToken) {
         for output_port in self.outputs.ports_mut() {
-            if output_port.ctrl.is_none() {
+            if output_port.incoming.is_none() {
                 continue;
             }
-            output_port.data = self.input.data.as_ref().map(|data| data.clone());
+            output_port.outgoing = self
+                .input
+                .incoming
+                .as_ref()
+                .map(|incoming| incoming.clone());
         }
     }
 
     fn process_outputs(&mut self, _: AccessToken) {
-        self.input.ctrl = self.outputs.ports().fold(None, |ctrl, port| {
+        self.input.outgoing = self.outputs.ports().fold(None, |ctrl, port| {
             if let Some(ctrl) = ctrl {
-                Some(ctrl.join_next_port_control(port.ctrl.as_ref()))
+                Some(ctrl.join_next_port_control(port.incoming.as_ref()))
             } else {
-                port.ctrl.as_ref().map(Clone::clone)
+                port.incoming.as_ref().map(Clone::clone)
             }
         })
     }
@@ -295,7 +299,7 @@ where
 #[derive(Debug, Default, Clone)]
 
 pub struct DebugPrinterSink<C, D> {
-    pub inputs: VecPortBay<C, D>,
+    pub inputs: VecPortBay<D, C>,
 }
 
 impl<C, D> DebugPrinterSink<C, D> {
@@ -305,11 +309,11 @@ impl<C, D> DebugPrinterSink<C, D> {
         }
     }
 
-    pub fn input(&self, input_index: PortIndex) -> &Port<C, D> {
+    pub fn input(&self, input_index: PortIndex) -> &Port<D, C> {
         self.inputs.port(input_index)
     }
 
-    pub fn input_mut(&mut self, input_index: PortIndex) -> &mut Port<C, D> {
+    pub fn input_mut(&mut self, input_index: PortIndex) -> &mut Port<D, C> {
         self.inputs.port_mut(input_index)
     }
 }
@@ -324,21 +328,21 @@ where
         self.inputs.num_ports()
     }
 
-    fn accept_input_datagram(
+    fn accept_input_packet(
         &mut self,
         _token: AccessToken,
         input_index: PortIndex,
-        packet: Datagram<C, D>,
+        packet: Packet<D, C>,
     ) {
-        self.inputs.accept_datagram(input_index, packet);
+        self.inputs.accept_packet(input_index, packet);
     }
 
-    fn dispatch_input_ctrlgram(
+    fn try_dispatch_input_packet(
         &mut self,
         _token: AccessToken,
         input_index: PortIndex,
-    ) -> Option<Ctrlgram<C, D>> {
-        self.inputs.dispatch_ctrlgram(input_index)
+    ) -> Option<Packet<C, D>> {
+        self.inputs.try_dispatch_packet(input_index)
     }
 }
 
@@ -347,20 +351,20 @@ impl<C, D> NodeOutputs<C, D> for DebugPrinterSink<C, D> {
         0
     }
 
-    fn accept_output_ctrlgram(
+    fn accept_output_packet(
         &mut self,
         _token: AccessToken,
         _output_index: PortIndex,
-        _packet: Ctrlgram<C, D>,
+        _packet: Packet<C, D>,
     ) {
         unimplemented!();
     }
 
-    fn dispatch_output_datagram(
+    fn try_dispatch_output_packet(
         &mut self,
         _token: AccessToken,
         _output_index: PortIndex,
-    ) -> Option<Datagram<C, D>> {
+    ) -> Option<Packet<D, C>> {
         unimplemented!();
     }
 }
@@ -375,7 +379,7 @@ where
             "{:?}",
             self.inputs
                 .ports_mut()
-                .map(|port| port.data.as_ref())
+                .map(|port| port.incoming.as_ref())
                 .collect::<Vec<_>>()
         );
     }
