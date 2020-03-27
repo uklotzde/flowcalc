@@ -1,15 +1,3 @@
-use std::fmt;
-
-pub trait PortStatus: fmt::Debug {
-    fn is_port_active(&self) -> bool;
-}
-
-impl PortStatus for bool {
-    fn is_port_active(&self) -> bool {
-        *self
-    }
-}
-
 /// An input or output port of a processing node.
 ///
 /// Ports have two generic parameters for packet data:
@@ -58,17 +46,7 @@ pub struct Datagram<C, D> {
     pub ctrl: Option<C>,
 }
 
-impl<C, D> Port<C, D>
-where
-    C: PortStatus,
-{
-    pub fn is_active(&self) -> bool {
-        self.ctrl
-            .as_ref()
-            .map(|ctrl| ctrl.is_port_active())
-            .unwrap_or(false)
-    }
-
+impl<C, D> Port<C, D> {
     /// Accept a ctrl packet from a connected input port
     pub fn accept_ctrlgram(&mut self, packet: Ctrlgram<C, D>) {
         debug_assert!(self.ctrl.is_none());
@@ -88,7 +66,6 @@ where
     /// Dispatch a ctrl packet for a connected input port
     pub fn dispatch_ctrlgram(&mut self) -> Option<Ctrlgram<C, D>> {
         if let Some(ctrl) = self.ctrl.take() {
-            debug_assert!(ctrl.is_port_active());
             Some(Ctrlgram {
                 ctrl,
                 data: self.data.take(),
@@ -181,10 +158,7 @@ impl<C, D> VecPortBay<C, D> {
     }
 }
 
-impl<C, D> PortBay<C, D> for VecPortBay<C, D>
-where
-    C: PortStatus,
-{
+impl<C, D> PortBay<C, D> for VecPortBay<C, D> {
     fn num_ports(&self) -> usize {
         self.ports.len()
     }

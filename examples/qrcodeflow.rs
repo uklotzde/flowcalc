@@ -46,17 +46,17 @@ impl Node<bool, Value> for RandomAsciiTextSource {
 
     fn accept_input_datagram(
         &mut self,
-        token: AccessToken,
-        input_index: PortIndex,
-        packet: Datagram<bool, Value>,
+        _token: AccessToken,
+        _input_index: PortIndex,
+        _packet: Datagram<bool, Value>,
     ) {
         unimplemented!();
     }
 
     fn accept_output_ctrlgram(
         &mut self,
-        token: AccessToken,
-        output_index: PortIndex,
+        _token: AccessToken,
+        _output_index: PortIndex,
         packet: Ctrlgram<bool, Value>,
     ) {
         self.output.accept_ctrlgram(packet);
@@ -64,16 +64,16 @@ impl Node<bool, Value> for RandomAsciiTextSource {
 
     fn dispatch_input_ctrlgram(
         &mut self,
-        token: AccessToken,
-        input_index: PortIndex,
+        _token: AccessToken,
+        _input_index: PortIndex,
     ) -> Option<Ctrlgram<bool, Value>> {
         unimplemented!();
     }
 
     fn dispatch_output_datagram(
         &mut self,
-        token: AccessToken,
-        output_index: PortIndex,
+        _token: AccessToken,
+        _output_index: PortIndex,
     ) -> Option<Datagram<bool, Value>> {
         self.output.dispatch_datagram()
     }
@@ -81,7 +81,7 @@ impl Node<bool, Value> for RandomAsciiTextSource {
 
 impl NodeProcessor for RandomAsciiTextSource {
     fn process_inputs(&mut self, _: AccessToken) {
-        if !self.output.is_active() {
+        if self.output.ctrl.is_none() {
             return;
         }
         let text = self.gen_text();
@@ -119,8 +119,8 @@ impl Node<bool, Value> for TextQrEncoder {
 
     fn accept_input_datagram(
         &mut self,
-        token: AccessToken,
-        input_index: PortIndex,
+        _token: AccessToken,
+        _input_index: PortIndex,
         packet: Datagram<bool, Value>,
     ) {
         self.input.accept_datagram(packet);
@@ -128,8 +128,8 @@ impl Node<bool, Value> for TextQrEncoder {
 
     fn accept_output_ctrlgram(
         &mut self,
-        token: AccessToken,
-        output_index: PortIndex,
+        _token: AccessToken,
+        _output_index: PortIndex,
         packet: Ctrlgram<bool, Value>,
     ) {
         self.output.accept_ctrlgram(packet);
@@ -137,16 +137,16 @@ impl Node<bool, Value> for TextQrEncoder {
 
     fn dispatch_input_ctrlgram(
         &mut self,
-        token: AccessToken,
-        input_index: PortIndex,
+        _token: AccessToken,
+        _input_index: PortIndex,
     ) -> Option<Ctrlgram<bool, Value>> {
         self.input.dispatch_ctrlgram()
     }
 
     fn dispatch_output_datagram(
         &mut self,
-        token: AccessToken,
-        output_index: PortIndex,
+        _token: AccessToken,
+        _output_index: PortIndex,
     ) -> Option<Datagram<bool, Value>> {
         self.output.dispatch_datagram()
     }
@@ -154,7 +154,7 @@ impl Node<bool, Value> for TextQrEncoder {
 
 impl NodeProcessor for TextQrEncoder {
     fn process_inputs(&mut self, _: AccessToken) {
-        if !self.output.is_active() {
+        if self.output.ctrl.is_none() {
             return;
         }
         let input_value = self.input.data.take();
@@ -199,8 +199,8 @@ impl Node<bool, Value> for QrTextDecoder {
 
     fn accept_input_datagram(
         &mut self,
-        token: AccessToken,
-        input_index: PortIndex,
+        _token: AccessToken,
+        _input_index: PortIndex,
         packet: Datagram<bool, Value>,
     ) {
         self.input.accept_datagram(packet);
@@ -208,8 +208,8 @@ impl Node<bool, Value> for QrTextDecoder {
 
     fn accept_output_ctrlgram(
         &mut self,
-        token: AccessToken,
-        output_index: PortIndex,
+        _token: AccessToken,
+        _output_index: PortIndex,
         packet: Ctrlgram<bool, Value>,
     ) {
         self.output.accept_ctrlgram(packet);
@@ -217,16 +217,16 @@ impl Node<bool, Value> for QrTextDecoder {
 
     fn dispatch_input_ctrlgram(
         &mut self,
-        token: AccessToken,
-        input_index: PortIndex,
+        _token: AccessToken,
+        _input_index: PortIndex,
     ) -> Option<Ctrlgram<bool, Value>> {
         self.input.dispatch_ctrlgram()
     }
 
     fn dispatch_output_datagram(
         &mut self,
-        token: AccessToken,
-        output_index: PortIndex,
+        _token: AccessToken,
+        _output_index: PortIndex,
     ) -> Option<Datagram<bool, Value>> {
         self.output.dispatch_datagram()
     }
@@ -234,7 +234,7 @@ impl Node<bool, Value> for QrTextDecoder {
 
 impl NodeProcessor for QrTextDecoder {
     fn process_inputs(&mut self, _: AccessToken) {
-        if !self.output.is_active() {
+        if self.output.ctrl.is_none() {
             return;
         }
         let input_value = self.input.data.take();

@@ -1,6 +1,6 @@
 use super::{
     flow::AccessToken,
-    port::{Ctrlgram, Datagram, Port, PortBay, PortIndex, PortStatus, VecPortBay},
+    port::{Ctrlgram, Datagram, Port, PortBay, PortIndex, VecPortBay},
 };
 
 use std::{cell::RefCell, fmt, rc::Rc};
@@ -219,7 +219,7 @@ impl<C, D> OneToManySplitter<C, D> {
 
 impl<C, D> Node<C, D> for OneToManySplitter<C, D>
 where
-    C: PortStatus + JoinablePortControl + Clone,
+    C: Clone + JoinablePortControl,
     D: Clone,
 {
     fn num_inputs(&self) -> usize {
@@ -269,13 +269,12 @@ where
 
 impl<C, D> NodeProcessor for OneToManySplitter<C, D>
 where
-    C: PortStatus + JoinablePortControl + Clone,
+    C: Clone + JoinablePortControl,
     D: Clone,
 {
     fn process_inputs(&mut self, _token: AccessToken) {
-        debug_assert!(self.input.is_active());
         for output_port in self.outputs.ports_mut() {
-            if !output_port.is_active() {
+            if output_port.ctrl.is_none() {
                 continue;
             }
             output_port.data = self.input.data.as_ref().map(|data| data.clone());
@@ -317,7 +316,6 @@ impl<C, D> DebugPrinterSink<C, D> {
 
 impl<C, D> Node<C, D> for DebugPrinterSink<C, D>
 where
-    C: PortStatus,
     D: fmt::Debug,
 {
     fn num_inputs(&self) -> usize {
@@ -365,7 +363,6 @@ where
 
 impl<C, D> NodeProcessor for DebugPrinterSink<C, D>
 where
-    C: PortStatus,
     D: fmt::Debug,
 {
     fn process_inputs(&mut self, _: AccessToken) {
