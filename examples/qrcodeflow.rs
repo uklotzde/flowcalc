@@ -14,7 +14,7 @@ enum Value {
 struct RandomAsciiTextSource {
     num_chars: usize,
     rng: ThreadRng,
-    output: Port<bool, Value>,
+    output: Port<(), Value>,
 }
 
 impl RandomAsciiTextSource {
@@ -35,9 +35,9 @@ impl RandomAsciiTextSource {
     }
 }
 
-impl Node<bool, Value> for RandomAsciiTextSource {}
+impl Node<(), Value> for RandomAsciiTextSource {}
 
-impl NodeInputs<bool, Value> for RandomAsciiTextSource {
+impl NodeInputs<(), Value> for RandomAsciiTextSource {
     fn num_inputs(&self) -> usize {
         0
     }
@@ -46,7 +46,7 @@ impl NodeInputs<bool, Value> for RandomAsciiTextSource {
         &mut self,
         _token: AccessToken,
         _input_index: PortIndex,
-        _packet: Datagram<bool, Value>,
+        _packet: Datagram<(), Value>,
     ) {
         unimplemented!();
     }
@@ -55,12 +55,12 @@ impl NodeInputs<bool, Value> for RandomAsciiTextSource {
         &mut self,
         _token: AccessToken,
         _input_index: PortIndex,
-    ) -> Option<Ctrlgram<bool, Value>> {
+    ) -> Option<Ctrlgram<(), Value>> {
         unimplemented!();
     }
 }
 
-impl NodeOutputs<bool, Value> for RandomAsciiTextSource {
+impl NodeOutputs<(), Value> for RandomAsciiTextSource {
     fn num_outputs(&self) -> usize {
         1
     }
@@ -69,7 +69,7 @@ impl NodeOutputs<bool, Value> for RandomAsciiTextSource {
         &mut self,
         _token: AccessToken,
         _output_index: PortIndex,
-        packet: Ctrlgram<bool, Value>,
+        packet: Ctrlgram<(), Value>,
     ) {
         self.output.accept_ctrlgram(packet);
     }
@@ -78,7 +78,7 @@ impl NodeOutputs<bool, Value> for RandomAsciiTextSource {
         &mut self,
         _token: AccessToken,
         _output_index: PortIndex,
-    ) -> Option<Datagram<bool, Value>> {
+    ) -> Option<Datagram<(), Value>> {
         self.output.dispatch_datagram()
     }
 }
@@ -99,8 +99,8 @@ impl NodeProcessor for RandomAsciiTextSource {
 
 #[derive(Debug)]
 struct TextQrEncoder {
-    input: Port<bool, Value>,
-    output: Port<bool, Value>,
+    input: Port<(), Value>,
+    output: Port<(), Value>,
 }
 
 impl TextQrEncoder {
@@ -112,9 +112,9 @@ impl TextQrEncoder {
     }
 }
 
-impl Node<bool, Value> for TextQrEncoder {}
+impl Node<(), Value> for TextQrEncoder {}
 
-impl NodeInputs<bool, Value> for TextQrEncoder {
+impl NodeInputs<(), Value> for TextQrEncoder {
     fn num_inputs(&self) -> usize {
         1
     }
@@ -123,7 +123,7 @@ impl NodeInputs<bool, Value> for TextQrEncoder {
         &mut self,
         _token: AccessToken,
         _input_index: PortIndex,
-        packet: Datagram<bool, Value>,
+        packet: Datagram<(), Value>,
     ) {
         self.input.accept_datagram(packet);
     }
@@ -132,12 +132,12 @@ impl NodeInputs<bool, Value> for TextQrEncoder {
         &mut self,
         _token: AccessToken,
         _input_index: PortIndex,
-    ) -> Option<Ctrlgram<bool, Value>> {
+    ) -> Option<Ctrlgram<(), Value>> {
         self.input.dispatch_ctrlgram()
     }
 }
 
-impl NodeOutputs<bool, Value> for TextQrEncoder {
+impl NodeOutputs<(), Value> for TextQrEncoder {
     fn num_outputs(&self) -> usize {
         1
     }
@@ -146,7 +146,7 @@ impl NodeOutputs<bool, Value> for TextQrEncoder {
         &mut self,
         _token: AccessToken,
         _output_index: PortIndex,
-        packet: Ctrlgram<bool, Value>,
+        packet: Ctrlgram<(), Value>,
     ) {
         self.output.accept_ctrlgram(packet);
     }
@@ -155,7 +155,7 @@ impl NodeOutputs<bool, Value> for TextQrEncoder {
         &mut self,
         _token: AccessToken,
         _output_index: PortIndex,
-    ) -> Option<Datagram<bool, Value>> {
+    ) -> Option<Datagram<(), Value>> {
         self.output.dispatch_datagram()
     }
 }
@@ -181,8 +181,8 @@ impl NodeProcessor for TextQrEncoder {
 }
 
 struct QrTextDecoder {
-    input: Port<bool, Value>,
-    output: Port<bool, Value>,
+    input: Port<(), Value>,
+    output: Port<(), Value>,
     decoder: bardecoder::Decoder<image::DynamicImage, image::GrayImage>,
 }
 
@@ -196,9 +196,9 @@ impl QrTextDecoder {
     }
 }
 
-impl Node<bool, Value> for QrTextDecoder {}
+impl Node<(), Value> for QrTextDecoder {}
 
-impl NodeInputs<bool, Value> for QrTextDecoder {
+impl NodeInputs<(), Value> for QrTextDecoder {
     fn num_inputs(&self) -> usize {
         1
     }
@@ -207,7 +207,7 @@ impl NodeInputs<bool, Value> for QrTextDecoder {
         &mut self,
         _token: AccessToken,
         _input_index: PortIndex,
-        packet: Datagram<bool, Value>,
+        packet: Datagram<(), Value>,
     ) {
         self.input.accept_datagram(packet);
     }
@@ -216,12 +216,12 @@ impl NodeInputs<bool, Value> for QrTextDecoder {
         &mut self,
         _token: AccessToken,
         _input_index: PortIndex,
-    ) -> Option<Ctrlgram<bool, Value>> {
+    ) -> Option<Ctrlgram<(), Value>> {
         self.input.dispatch_ctrlgram()
     }
 }
 
-impl NodeOutputs<bool, Value> for QrTextDecoder {
+impl NodeOutputs<(), Value> for QrTextDecoder {
     fn num_outputs(&self) -> usize {
         1
     }
@@ -230,7 +230,7 @@ impl NodeOutputs<bool, Value> for QrTextDecoder {
         &mut self,
         _token: AccessToken,
         _output_index: PortIndex,
-        packet: Ctrlgram<bool, Value>,
+        packet: Ctrlgram<(), Value>,
     ) {
         self.output.accept_ctrlgram(packet);
     }
@@ -239,7 +239,7 @@ impl NodeOutputs<bool, Value> for QrTextDecoder {
         &mut self,
         _token: AccessToken,
         _output_index: PortIndex,
-    ) -> Option<Datagram<bool, Value>> {
+    ) -> Option<Datagram<(), Value>> {
         self.output.dispatch_datagram()
     }
 }
@@ -275,8 +275,8 @@ fn main() {
     let source = Rc::new(RefCell::new(RandomAsciiTextSource::new(20)));
     let encoder = Rc::new(RefCell::new(TextQrEncoder::new()));
     let decoder = Rc::new(RefCell::new(QrTextDecoder::new()));
-    let splitter = Rc::new(RefCell::new(OneToManySplitter::<bool, Value>::new(2)));
-    let printer = Rc::new(RefCell::new(DebugPrinterSink::<bool, Value>::new(2)));
+    let splitter = Rc::new(RefCell::new(OneToManySplitter::<(), Value>::new(2)));
+    let printer = Rc::new(RefCell::new(DebugPrinterSink::<(), Value>::new(2)));
 
     let mut flow: Flow<RcProxyNode<_, _>, _, _> = Flow::new();
     let source_id = flow.add_node(RcProxyNode::new(Rc::clone(&source) as _));
@@ -337,7 +337,7 @@ fn main() {
 
     // Activate all sink inputs
     for port in printer.borrow_mut().inputs.ports_mut() {
-        port.ctrl = Some(true);
+        port.ctrl = Some(());
     }
 
     let topo_nodes = flow.topological_nodes().unwrap();
