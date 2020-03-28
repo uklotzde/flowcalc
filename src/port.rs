@@ -2,20 +2,22 @@
 pub struct Packet<P, B> {
     /// The payload
     ///
-    /// Within a flow graph the payload in forward direction
-    /// (2nd phase) contains the actual data message while in
-    /// backward direction (1st phase) the payload contains
-    /// a control message.
+    /// Within a flow graph the payload in backward direction
+    /// during the 1st phase contains a control message. In
+    /// forward direction during the 2nd phase it contains
+    /// the actual data message.
     pub payload: P,
 
     /// Optional pre-allocated data to be reused when passing
     /// back a complementary packet into the opposite direction
     ///
     /// Within a flow graph the piggyback in backward direction
-    /// (1st phase) contains a pre-allocated data message to be
-    /// used for the return path while in forward direction
-    /// (2nd phasee) the payload contains the previously received
-    /// control message.
+    /// during the 1st phase contains a pre-allocated data message
+    /// that is supposed to store the results when processing the
+    /// actual data during the 2nd phase. In forward direction
+    /// during the 2nd phase it contains the previously received
+    /// control message that is supposed to be reused on subsequent
+    /// invocations.
     pub piggyback: Option<B>,
 }
 
@@ -35,11 +37,11 @@ pub struct Packet<P, B> {
 #[derive(Default, Debug, Clone, Copy)]
 pub struct Port<I, O> {
     /// A slot (= a buffer with capacity 1) for the payload of an
-    /// incoming package
+    /// acceptable (= incoming) package
     pub incoming: Option<I>,
 
     /// A slot (= a buffer with capacity 1) for the playload of an
-    /// outgoing packet
+    /// dispatchable (= outgoing) packet
     pub outgoing: Option<O>,
 }
 

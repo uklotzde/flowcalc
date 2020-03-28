@@ -263,9 +263,9 @@ where
 
     /// Execute backward pass for a single node
     ///
-    /// Propagate the output states of a select node to its
-    /// inputs and then along the input connections to all
-    /// outputs of preceding nodes.
+    /// Propagate the control messages from the outputs of
+    /// a selected node to its inputs and then along the
+    /// input connections to all outputs of preceding nodes.
     pub fn process_outputs(&mut self, node_id: NodeId) {
         let flow_node_ptr = {
             let flow_node = self.flow_node_mut(node_id);
@@ -299,9 +299,9 @@ where
 
     /// Execute forward pass for a single node
     ///
-    /// Update the output values of a selected node and then
-    /// pass those values along the output connections to all
-    /// inputs of subsequent nodes.
+    /// Update the outputs of a selected node by processing the
+    /// inputs and then pass those values along the output
+    /// connections to all inputs of subsequent nodes.
     pub fn process_inputs(&mut self, node_id: NodeId) {
         let flow_node_ptr = {
             let flow_node_ptr = self.flow_node_mut(node_id);

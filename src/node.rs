@@ -35,6 +35,13 @@ pub trait NodeProcessor {
     fn process_inputs(&mut self, token: AccessToken);
 }
 
+/// The input ports of a node
+///
+/// An input ports passes a control payload of type `C` to
+/// a connected predecessor node in backward direction.
+///
+/// In return an input port receives a data payload of type `D`
+/// from a connected predecessor node in forward direction.
 pub trait NodeInputs<C, D> {
     /// Query the number of input ports
     fn num_inputs(&self) -> usize;
@@ -53,6 +60,13 @@ pub trait NodeInputs<C, D> {
     ) -> Option<Packet<C, D>>;
 }
 
+/// The output ports of a node
+///
+/// An output ports receives a control payload of type `C` from
+/// a connected successor node in backward direction.
+///
+/// In return an output port passes a data payload of type `D`
+/// to a connected successor node in forward direction.
 pub trait NodeOutputs<C, D> {
     /// Query the number of output ports
     fn num_outputs(&self) -> usize;
